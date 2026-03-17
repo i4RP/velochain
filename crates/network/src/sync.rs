@@ -265,11 +265,7 @@ impl SyncEngine {
         self.local_head = new_head;
 
         // Remove headers at or below the new head.
-        let to_remove: Vec<u64> = self
-            .headers
-            .range(..=new_head)
-            .map(|(&k, _)| k)
-            .collect();
+        let to_remove: Vec<u64> = self.headers.range(..=new_head).map(|(&k, _)| k).collect();
         for num in to_remove {
             self.headers.remove(&num);
         }
@@ -298,7 +294,10 @@ impl SyncEngine {
         };
 
         let mut requests = Vec::new();
-        let max_new = self.config.max_header_requests.saturating_sub(self.header_requests.len());
+        let max_new = self
+            .config
+            .max_header_requests
+            .saturating_sub(self.header_requests.len());
 
         // Find the highest block we've requested or downloaded.
         let highest_requested = self
@@ -308,8 +307,8 @@ impl SyncEngine {
             .max()
             .unwrap_or(0);
         let highest_downloaded = self.headers.keys().last().copied().unwrap_or(0);
-        let mut start = std::cmp::max(highest_requested, highest_downloaded)
-            .max(self.local_head + 1);
+        let mut start =
+            std::cmp::max(highest_requested, highest_downloaded).max(self.local_head + 1);
 
         for _ in 0..max_new {
             if start > target_block {
@@ -352,8 +351,7 @@ impl SyncEngine {
         let count = headers.len() as u64;
 
         // Remove matching pending request.
-        self.header_requests
-            .retain(|_, req| req.start != first_num);
+        self.header_requests.retain(|_, req| req.start != first_num);
 
         // Store headers.
         for (number, hash, parent_hash) in &headers {
@@ -393,7 +391,10 @@ impl SyncEngine {
             return Vec::new();
         }
 
-        let max_new = self.config.max_body_requests.saturating_sub(self.body_requests.len());
+        let max_new = self
+            .config
+            .max_body_requests
+            .saturating_sub(self.body_requests.len());
         let mut requests = Vec::new();
 
         // Collect hashes of headers that still need bodies.
@@ -443,9 +444,8 @@ impl SyncEngine {
 
         // Remove matching pending request.
         let hash_set: HashSet<[u8; 32]> = hashes.iter().copied().collect();
-        self.body_requests.retain(|_, req| {
-            !req.hashes.iter().all(|h| hash_set.contains(h))
-        });
+        self.body_requests
+            .retain(|_, req| !req.hashes.iter().all(|h| hash_set.contains(h)));
 
         debug!("Matched {} bodies", matched);
 
@@ -521,18 +521,14 @@ impl SyncEngine {
             if let Some(mut req) = self.header_requests.remove(&id) {
                 req.retries += 1;
                 if req.retries > self.config.max_retries {
-                    results.push(SyncResult::Error(SyncError::MaxRetries {
-                        request_id: id,
-                    }));
+                    results.push(SyncResult::Error(SyncError::MaxRetries { request_id: id }));
                 } else {
                     // Re-queue with updated tick.
                     req.created_tick = self.current_tick;
                     let new_id = self.next_request_id;
                     self.next_request_id += 1;
                     self.header_requests.insert(new_id, req);
-                    results.push(SyncResult::Error(SyncError::Timeout {
-                        request_id: id,
-                    }));
+                    results.push(SyncResult::Error(SyncError::Timeout { request_id: id }));
                 }
             }
         }
@@ -549,17 +545,13 @@ impl SyncEngine {
             if let Some(mut req) = self.body_requests.remove(&id) {
                 req.retries += 1;
                 if req.retries > self.config.max_retries {
-                    results.push(SyncResult::Error(SyncError::MaxRetries {
-                        request_id: id,
-                    }));
+                    results.push(SyncResult::Error(SyncError::MaxRetries { request_id: id }));
                 } else {
                     req.created_tick = self.current_tick;
                     let new_id = self.next_request_id;
                     self.next_request_id += 1;
                     self.body_requests.insert(new_id, req);
-                    results.push(SyncResult::Error(SyncError::Timeout {
-                        request_id: id,
-                    }));
+                    results.push(SyncResult::Error(SyncError::Timeout { request_id: id }));
                 }
             }
         }
@@ -719,10 +711,7 @@ mod tests {
         }
 
         let result = engine.verify_chain();
-        assert_eq!(
-            result,
-            SyncResult::RangeVerified { from: 1, to: 5 }
-        );
+        assert_eq!(result, SyncResult::RangeVerified { from: 1, to: 5 });
         assert_eq!(engine.import_ready_count(), 5);
     }
 

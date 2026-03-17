@@ -50,7 +50,11 @@ impl WriteBatchOps {
     }
 
     /// Add a block header to the batch.
-    pub fn put_header(&mut self, hash: &[u8; 32], header: &BlockHeader) -> Result<(), StorageError> {
+    pub fn put_header(
+        &mut self,
+        hash: &[u8; 32],
+        header: &BlockHeader,
+    ) -> Result<(), StorageError> {
         let encoded =
             bincode::serialize(header).map_err(|e| StorageError::Serialization(e.to_string()))?;
         self.put_cf(tables::cf::HEADERS, hash, &encoded)?;
@@ -79,14 +83,22 @@ impl WriteBatchOps {
             };
             let tx_index_encoded = bincode::serialize(&tx_index)
                 .map_err(|e| StorageError::Serialization(e.to_string()))?;
-            self.put_cf(tables::cf::TRANSACTIONS, tx.hash.as_ref(), &tx_index_encoded)?;
+            self.put_cf(
+                tables::cf::TRANSACTIONS,
+                tx.hash.as_ref(),
+                &tx_index_encoded,
+            )?;
         }
 
         Ok(())
     }
 
     /// Add a receipt to the batch.
-    pub fn put_receipt(&mut self, tx_hash: &[u8; 32], receipt_data: &[u8]) -> Result<(), StorageError> {
+    pub fn put_receipt(
+        &mut self,
+        tx_hash: &[u8; 32],
+        receipt_data: &[u8],
+    ) -> Result<(), StorageError> {
         self.put_cf(tables::cf::RECEIPTS, tx_hash, receipt_data)
     }
 

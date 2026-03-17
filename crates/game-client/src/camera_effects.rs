@@ -3,8 +3,8 @@
 //!
 //! Extends the base camera module with game-feel enhancements.
 
+use crate::camera::{CameraConfig, LocalPlayer, MainCamera};
 use bevy::prelude::*;
-use crate::camera::{MainCamera, CameraConfig, LocalPlayer};
 
 /// Plugin for camera effects.
 pub struct CameraEffectsPlugin;
@@ -16,13 +16,17 @@ impl Plugin for CameraEffectsPlugin {
             .insert_resource(CameraBounds::default())
             .insert_resource(CameraMode::default())
             .add_event::<CameraEvent>()
-            .add_systems(Update, (
-                handle_camera_events,
-                apply_screen_shake,
-                apply_zoom_transition,
-                apply_camera_bounds,
-                handle_cinematic_mode,
-            ).chain());
+            .add_systems(
+                Update,
+                (
+                    handle_camera_events,
+                    apply_screen_shake,
+                    apply_zoom_transition,
+                    apply_camera_bounds,
+                    handle_cinematic_mode,
+                )
+                    .chain(),
+            );
     }
 }
 
@@ -34,29 +38,17 @@ impl Plugin for CameraEffectsPlugin {
 #[derive(Event, Clone, Debug)]
 pub enum CameraEvent {
     /// Trigger screen shake.
-    Shake {
-        intensity: f32,
-        duration: f32,
-    },
+    Shake { intensity: f32, duration: f32 },
     /// Smoothly zoom to a target level.
-    ZoomTo {
-        target: f32,
-        speed: f32,
-    },
+    ZoomTo { target: f32, speed: f32 },
     /// Focus camera on a world position.
-    FocusOn {
-        position: Vec2,
-        duration: f32,
-    },
+    FocusOn { position: Vec2, duration: f32 },
     /// Return camera to follow player.
     ReturnToPlayer,
     /// Toggle cinematic mode (free camera).
     ToggleCinematic,
     /// Set camera bounds.
-    SetBounds {
-        min: Vec2,
-        max: Vec2,
-    },
+    SetBounds { min: Vec2, max: Vec2 },
     /// Clear camera bounds.
     ClearBounds,
 }
@@ -144,10 +136,9 @@ impl CameraBounds {
     /// Clamp a position to within bounds.
     pub fn clamp(&self, pos: Vec2) -> Vec2 {
         match (self.min, self.max) {
-            (Some(min), Some(max)) => Vec2::new(
-                pos.x.clamp(min.x, max.x),
-                pos.y.clamp(min.y, max.y),
-            ),
+            (Some(min), Some(max)) => {
+                Vec2::new(pos.x.clamp(min.x, max.x), pos.y.clamp(min.y, max.y))
+            }
             _ => pos,
         }
     }
@@ -201,7 +192,10 @@ fn handle_camera_events(
 ) {
     for event in events.read() {
         match event {
-            CameraEvent::Shake { intensity, duration } => {
+            CameraEvent::Shake {
+                intensity,
+                duration,
+            } => {
                 shake.trigger(*intensity, *duration);
             }
             CameraEvent::ZoomTo { target, speed } => {
@@ -331,7 +325,9 @@ fn handle_cinematic_mode(
 
     match mode.mode {
         CameraModeType::Cinematic => {
-            let Ok(mut cam) = camera_query.get_single_mut() else { return };
+            let Ok(mut cam) = camera_query.get_single_mut() else {
+                return;
+            };
             let speed = mode.cinematic_speed * dt;
 
             if keyboard.pressed(KeyCode::ArrowUp) || keyboard.pressed(KeyCode::KeyW) {
@@ -431,7 +427,10 @@ mod tests {
 
         assert_eq!(bounds.clamp(Vec2::new(0.0, 0.0)), Vec2::new(0.0, 0.0));
         assert_eq!(bounds.clamp(Vec2::new(100.0, 100.0)), Vec2::new(50.0, 50.0));
-        assert_eq!(bounds.clamp(Vec2::new(-100.0, -100.0)), Vec2::new(-50.0, -50.0));
+        assert_eq!(
+            bounds.clamp(Vec2::new(-100.0, -100.0)),
+            Vec2::new(-50.0, -50.0)
+        );
     }
 
     #[test]
@@ -450,12 +449,24 @@ mod tests {
     #[test]
     fn test_camera_events_all_variants() {
         let events = vec![
-            CameraEvent::Shake { intensity: 5.0, duration: 0.5 },
-            CameraEvent::ZoomTo { target: 2.0, speed: 3.0 },
-            CameraEvent::FocusOn { position: Vec2::new(10.0, 20.0), duration: 2.0 },
+            CameraEvent::Shake {
+                intensity: 5.0,
+                duration: 0.5,
+            },
+            CameraEvent::ZoomTo {
+                target: 2.0,
+                speed: 3.0,
+            },
+            CameraEvent::FocusOn {
+                position: Vec2::new(10.0, 20.0),
+                duration: 2.0,
+            },
             CameraEvent::ReturnToPlayer,
             CameraEvent::ToggleCinematic,
-            CameraEvent::SetBounds { min: Vec2::ZERO, max: Vec2::new(100.0, 100.0) },
+            CameraEvent::SetBounds {
+                min: Vec2::ZERO,
+                max: Vec2::new(100.0, 100.0),
+            },
             CameraEvent::ClearBounds,
         ];
         assert_eq!(events.len(), 7);

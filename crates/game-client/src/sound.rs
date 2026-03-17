@@ -15,10 +15,7 @@ impl Plugin for SoundPlugin {
         app.insert_resource(SoundConfig::default())
             .insert_resource(SoundState::default())
             .add_event::<SoundEvent>()
-            .add_systems(Update, (
-                handle_sound_events,
-                update_bgm_state,
-            ));
+            .add_systems(Update, (handle_sound_events, update_bgm_state));
     }
 }
 
@@ -56,17 +53,29 @@ impl Default for SoundConfig {
 impl SoundConfig {
     /// Effective BGM volume accounting for master and mute.
     pub fn effective_bgm(&self) -> f32 {
-        if self.muted { 0.0 } else { self.master_volume * self.bgm_volume }
+        if self.muted {
+            0.0
+        } else {
+            self.master_volume * self.bgm_volume
+        }
     }
 
     /// Effective SFX volume.
     pub fn effective_sfx(&self) -> f32 {
-        if self.muted { 0.0 } else { self.master_volume * self.sfx_volume }
+        if self.muted {
+            0.0
+        } else {
+            self.master_volume * self.sfx_volume
+        }
     }
 
     /// Effective environment volume.
     pub fn effective_env(&self) -> f32 {
-        if self.muted { 0.0 } else { self.master_volume * self.env_volume }
+        if self.muted {
+            0.0
+        } else {
+            self.master_volume * self.env_volume
+        }
     }
 }
 
@@ -306,10 +315,7 @@ fn handle_sound_events(
     }
 }
 
-fn update_bgm_state(
-    time: Res<Time>,
-    mut state: ResMut<SoundState>,
-) {
+fn update_bgm_state(time: Res<Time>, mut state: ResMut<SoundState>) {
     if !state.crossfading {
         return;
     }
@@ -401,16 +407,23 @@ mod tests {
 
     #[test]
     fn test_event_to_sfx_mapping() {
-        assert_eq!(event_to_sfx_id(&SoundEvent::AttackSwing), Some(SfxId::AttackSwing));
+        assert_eq!(
+            event_to_sfx_id(&SoundEvent::AttackSwing),
+            Some(SfxId::AttackSwing)
+        );
         assert_eq!(event_to_sfx_id(&SoundEvent::LevelUp), Some(SfxId::LevelUp));
         assert_eq!(event_to_sfx_id(&SoundEvent::UiClick), Some(SfxId::UiClick));
         assert_eq!(
-            event_to_sfx_id(&SoundEvent::ChangeBgm { track: BgmTrack::Combat }),
+            event_to_sfx_id(&SoundEvent::ChangeBgm {
+                track: BgmTrack::Combat
+            }),
             None
         );
         assert_eq!(event_to_sfx_id(&SoundEvent::StopBgm), None);
         assert_eq!(
-            event_to_sfx_id(&SoundEvent::ChangeAmbient { ambient: AmbientSound::Rain }),
+            event_to_sfx_id(&SoundEvent::ChangeAmbient {
+                ambient: AmbientSound::Rain
+            }),
             None
         );
     }

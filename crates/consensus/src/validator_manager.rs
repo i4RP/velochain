@@ -63,7 +63,11 @@ pub enum ValidatorResult {
     /// Proposal created.
     ProposalCreated(ProposalId),
     /// Vote recorded.
-    VoteRecorded { proposal_id: ProposalId, votes_for: usize, votes_against: usize },
+    VoteRecorded {
+        proposal_id: ProposalId,
+        votes_for: usize,
+        votes_against: usize,
+    },
     /// Proposal approved and ready for execution.
     Approved(ProposalId),
     /// Proposal rejected.
@@ -188,8 +192,8 @@ impl ValidatorManager {
     /// Calculate the required number of votes for quorum.
     pub fn quorum_threshold(&self) -> usize {
         let total = self.validators.len() as u64;
-        let required = (total * self.config.quorum_numerator)
-            .div_ceil(self.config.quorum_denominator);
+        let required =
+            (total * self.config.quorum_numerator).div_ceil(self.config.quorum_denominator);
         required as usize
     }
 
@@ -302,7 +306,11 @@ impl ValidatorManager {
     }
 
     /// Check if a proposal has reached quorum and execute if so.
-    fn check_and_execute(&mut self, proposal_id: ProposalId, current_block: u64) -> ValidatorResult {
+    fn check_and_execute(
+        &mut self,
+        proposal_id: ProposalId,
+        current_block: u64,
+    ) -> ValidatorResult {
         let quorum = self.quorum_threshold();
         let proposal = self.proposals.get(&proposal_id).unwrap();
         let votes_for = proposal.votes_for.len();
@@ -318,7 +326,8 @@ impl ValidatorManager {
             match proposal_type {
                 ProposalType::Add => {
                     self.validators.push(target);
-                    self.history.push((current_block, ProposalType::Add, target));
+                    self.history
+                        .push((current_block, ProposalType::Add, target));
                     info!("Validator added: {:?}", target);
                     let proposal = self.proposals.get_mut(&proposal_id).unwrap();
                     proposal.state = ProposalState::Executed;
@@ -398,10 +407,7 @@ mod tests {
         let v1 = make_address(1);
         let v2 = make_address(2);
         let v3 = make_address(3);
-        let vm = ValidatorManager::new(
-            vec![v1, v2, v3],
-            ValidatorManagerConfig::default(),
-        );
+        let vm = ValidatorManager::new(vec![v1, v2, v3], ValidatorManagerConfig::default());
         (vm, v1, v2, v3)
     }
 

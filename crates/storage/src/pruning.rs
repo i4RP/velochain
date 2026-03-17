@@ -148,11 +148,7 @@ impl PruningEngine {
     /// Update the chain head and check if pruning should run.
     ///
     /// Returns a list of `PruneTarget` blocks to prune, if any.
-    pub fn on_new_block(
-        &mut self,
-        block_number: u64,
-        _block_hash: [u8; 32],
-    ) -> Vec<PruneTarget> {
+    pub fn on_new_block(&mut self, block_number: u64, _block_hash: [u8; 32]) -> Vec<PruneTarget> {
         self.chain_head = block_number;
         self.stats.chain_head = block_number;
 

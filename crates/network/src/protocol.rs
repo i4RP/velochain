@@ -18,7 +18,9 @@ pub enum NetworkMessage {
     /// A new transaction announcement.
     NewTransaction(SignedTransaction),
     /// Request a block by number.
-    GetBlock { number: u64 },
+    GetBlock {
+        number: u64,
+    },
     /// Response with a requested block.
     BlockResponse(Option<Block>),
     /// Request the current chain head.

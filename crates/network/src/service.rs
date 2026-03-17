@@ -3,11 +3,7 @@
 use crate::error::NetworkError;
 use crate::protocol::{self, NetworkMessage};
 use futures::StreamExt;
-use libp2p::{
-    gossipsub, identify, mdns, noise,
-    swarm::SwarmEvent,
-    tcp, yamux, Multiaddr, PeerId,
-};
+use libp2p::{gossipsub, identify, mdns, noise, swarm::SwarmEvent, tcp, yamux, Multiaddr, PeerId};
 use parking_lot::RwLock;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -105,8 +101,8 @@ impl NetworkService {
                 noise::Config::new,
                 yamux::Config::default,
             )
-                        .map_err(|e| NetworkError::Transport(e.to_string()))?
-                        .with_behaviour(|key| {
+            .map_err(|e| NetworkError::Transport(e.to_string()))?
+            .with_behaviour(|key| {
                 let gossipsub_config = gossipsub::ConfigBuilder::default()
                     .heartbeat_interval(std::time::Duration::from_secs(1))
                     .validation_mode(gossipsub::ValidationMode::Strict)
@@ -120,11 +116,9 @@ impl NetworkService {
                 )
                 .expect("valid gossipsub behaviour");
 
-                let mdns = mdns::tokio::Behaviour::new(
-                    mdns::Config::default(),
-                    key.public().to_peer_id(),
-                )
-                .expect("valid mdns");
+                let mdns =
+                    mdns::tokio::Behaviour::new(mdns::Config::default(), key.public().to_peer_id())
+                        .expect("valid mdns");
 
                 let identify = identify::Behaviour::new(identify::Config::new(
                     "/velochain/1.0.0".to_string(),
@@ -137,8 +131,8 @@ impl NetworkService {
                     identify,
                 })
             })
-                        .map_err(|e| NetworkError::Protocol(e.to_string()))?
-                        .build();
+            .map_err(|e| NetworkError::Protocol(e.to_string()))?
+            .build();
 
         let local_peer_id = *swarm.local_peer_id();
 
@@ -158,11 +152,14 @@ impl NetworkService {
             .map_err(|e: gossipsub::SubscriptionError| NetworkError::Protocol(e.to_string()))?;
 
         // Listen on configured address
-        swarm
-            .listen_on(config.listen_addr.clone())
-            .map_err(|e: libp2p::TransportError<std::io::Error>| NetworkError::Transport(e.to_string()))?;
+        swarm.listen_on(config.listen_addr.clone()).map_err(
+            |e: libp2p::TransportError<std::io::Error>| NetworkError::Transport(e.to_string()),
+        )?;
 
-        info!("Network listening on {}, peer_id={}", config.listen_addr, local_peer_id);
+        info!(
+            "Network listening on {}, peer_id={}",
+            config.listen_addr, local_peer_id
+        );
 
         // Dial boot nodes
         for addr in &config.boot_nodes {
@@ -320,15 +317,29 @@ impl NetworkService {
 
     /// Request block headers from peers for chain sync.
     pub fn request_headers(&self, start_block: u64, max_headers: u64) -> Result<(), NetworkError> {
-        let msg = protocol::NetworkMessage::GetHeaders { start_block, max_headers };
+        let msg = protocol::NetworkMessage::GetHeaders {
+            start_block,
+            max_headers,
+        };
         self.command_tx
             .send(NetworkCommand::PublishSyncRequest(Box::new(msg)))
             .map_err(|_| NetworkError::ChannelClosed)
     }
 
     /// Broadcast our status to peers.
-    pub fn broadcast_status(&self, chain_id: u64, best_block: u64, best_hash: [u8; 32], genesis_hash: [u8; 32]) -> Result<(), NetworkError> {
-        let msg = protocol::NetworkMessage::Status { chain_id, best_block, best_hash, genesis_hash };
+    pub fn broadcast_status(
+        &self,
+        chain_id: u64,
+        best_block: u64,
+        best_hash: [u8; 32],
+        genesis_hash: [u8; 32],
+    ) -> Result<(), NetworkError> {
+        let msg = protocol::NetworkMessage::Status {
+            chain_id,
+            best_block,
+            best_hash,
+            genesis_hash,
+        };
         self.command_tx
             .send(NetworkCommand::PublishSyncRequest(Box::new(msg)))
             .map_err(|_| NetworkError::ChannelClosed)

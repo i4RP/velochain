@@ -1,7 +1,7 @@
 //! Unit tests for PoA consensus engine.
 
 use super::*;
-use alloy_primitives::{Address, B256, B64, Bloom, U256};
+use alloy_primitives::{Address, Bloom, B256, B64, U256};
 use velochain_primitives::{Block, BlockHeader, Keypair, DEFAULT_BLOCK_GAS_LIMIT};
 
 fn make_genesis_header() -> BlockHeader {
@@ -56,11 +56,8 @@ fn test_readonly_is_not_validator() {
 #[test]
 fn test_with_keypair_is_validator() {
     let (keypairs, addrs) = test_validators();
-    let engine = poa::PoaConsensus::new_with_keypair(
-        keypairs[0].clone(),
-        addrs,
-        poa::PoaConfig::default(),
-    );
+    let engine =
+        poa::PoaConsensus::new_with_keypair(keypairs[0].clone(), addrs, poa::PoaConfig::default());
     assert!(engine.is_validator());
 }
 
@@ -85,11 +82,8 @@ fn test_proposer_empty_validators() {
 #[test]
 fn test_is_our_turn() {
     let (keypairs, addrs) = test_validators();
-    let engine = poa::PoaConsensus::new_with_keypair(
-        keypairs[0].clone(),
-        addrs,
-        poa::PoaConfig::default(),
-    );
+    let engine =
+        poa::PoaConsensus::new_with_keypair(keypairs[0].clone(), addrs, poa::PoaConfig::default());
     // Validator 0 should produce blocks at height 0, 2, 4, ...
     assert!(engine.is_our_turn(0));
     assert!(!engine.is_our_turn(1));
@@ -174,11 +168,8 @@ fn test_advance_tick() {
 #[test]
 fn test_prepare_and_seal_block() {
     let (keypairs, addrs) = test_validators();
-    let engine = poa::PoaConsensus::new_with_keypair(
-        keypairs[0].clone(),
-        addrs,
-        poa::PoaConfig::default(),
-    );
+    let engine =
+        poa::PoaConsensus::new_with_keypair(keypairs[0].clone(), addrs, poa::PoaConfig::default());
 
     let genesis = make_genesis_header();
     let header = engine.prepare_header(&genesis).unwrap();

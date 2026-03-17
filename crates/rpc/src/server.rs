@@ -10,7 +10,7 @@ use crate::eth_api::{EthApiImpl, EthApiServer};
 use crate::game_api::{GameApiImpl, GameApiServer};
 use crate::session::{SessionApiImpl, SessionApiServer, SessionManager};
 use crate::subscriptions::{
-    EventSender, EthSubscriptionApiImpl, EthSubscriptionApiServer, SubscriptionApiImpl,
+    EthSubscriptionApiImpl, EthSubscriptionApiServer, EventSender, SubscriptionApiImpl,
     SubscriptionApiServer,
 };
 use jsonrpsee::server::Server;

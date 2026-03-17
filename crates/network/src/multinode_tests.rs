@@ -170,7 +170,10 @@ mod tests {
 
         // 6. Verify chain.
         let result = sync.verify_chain();
-        assert!(matches!(result, SyncResult::RangeVerified { from: 1, to: 5 }));
+        assert!(matches!(
+            result,
+            SyncResult::RangeVerified { from: 1, to: 5 }
+        ));
 
         // 7. Import blocks.
         let ready = sync.drain_import_ready();

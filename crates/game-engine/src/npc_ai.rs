@@ -16,7 +16,10 @@ pub enum AiState {
     /// Chasing a target entity.
     Chasing { target_id: EntityId },
     /// Fleeing from a threat.
-    Fleeing { threat_id: EntityId, ticks_remaining: u32 },
+    Fleeing {
+        threat_id: EntityId,
+        ticks_remaining: u32,
+    },
     /// Returning to home position.
     Returning,
     /// Dead, waiting for respawn.
@@ -362,9 +365,7 @@ pub fn find_nearest_player(
                 let dy = pos.y - from.y;
                 let dist = (dx * dx + dy * dy).sqrt();
 
-                if dist <= max_range
-                    && (nearest.is_none() || dist < nearest.unwrap().1)
-                {
+                if dist <= max_range && (nearest.is_none() || dist < nearest.unwrap().1) {
                     nearest = Some((player_id, dist));
                 }
             }
@@ -405,7 +406,11 @@ mod tests {
 
     #[test]
     fn test_move_toward() {
-        let from = PositionComponent { x: 0.0, y: 0.0, z: 0.0 };
+        let from = PositionComponent {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
         let target = [10.0, 0.0, 0.0];
         let (dx, dy) = move_toward(&from, &target, 1.0);
         assert!((dx - 1.0).abs() < 0.01);
@@ -414,7 +419,11 @@ mod tests {
 
     #[test]
     fn test_move_toward_already_at_target() {
-        let from = PositionComponent { x: 5.0, y: 5.0, z: 0.0 };
+        let from = PositionComponent {
+            x: 5.0,
+            y: 5.0,
+            z: 0.0,
+        };
         let target = [5.0, 5.0, 0.0];
         let (dx, dy) = move_toward(&from, &target, 1.0);
         assert_eq!(dx, 0.0);

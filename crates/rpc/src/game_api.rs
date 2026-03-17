@@ -10,7 +10,7 @@ use velochain_primitives::Keypair;
 use velochain_txpool::TransactionPool;
 
 /// Re-export PlayerInfo and EntitySnapshot from game engine for RPC responses.
-pub use velochain_game_engine::{PlayerInfo, EntitySnapshot};
+pub use velochain_game_engine::{EntitySnapshot, PlayerInfo};
 
 /// World information response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,7 +42,11 @@ pub trait GameApi {
 
     /// Submit a game action (move, attack, etc.).
     #[method(name = "submitAction")]
-    async fn submit_action(&self, action_type: String, params: serde_json::Value) -> RpcResult<String>;
+    async fn submit_action(
+        &self,
+        action_type: String,
+        params: serde_json::Value,
+    ) -> RpcResult<String>;
 
     /// List all players in the world.
     #[method(name = "getAllPlayers")]
@@ -141,14 +145,13 @@ impl GameApiServer for GameApiImpl {
         max_x: f32,
         max_y: f32,
     ) -> RpcResult<Vec<EntitySnapshot>> {
-        Ok(self.game_world.get_entities_in_area(min_x, min_y, max_x, max_y))
+        Ok(self
+            .game_world
+            .get_entities_in_area(min_x, min_y, max_x, max_y))
     }
 }
 
-fn parse_game_action(
-    action_type: &str,
-    params: serde_json::Value,
-) -> RpcResult<GameAction> {
+fn parse_game_action(action_type: &str, params: serde_json::Value) -> RpcResult<GameAction> {
     match action_type {
         "move" => {
             let x = params.get("x").and_then(|v| v.as_i64()).unwrap_or(0);

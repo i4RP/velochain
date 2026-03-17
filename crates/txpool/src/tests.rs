@@ -1,11 +1,15 @@
 //! Unit tests for the transaction pool.
 
 use super::*;
-use velochain_primitives::{Keypair, Transaction, TxType};
-use velochain_primitives::transaction::GameAction;
 use alloy_primitives::U256;
+use velochain_primitives::transaction::GameAction;
+use velochain_primitives::{Keypair, Transaction, TxType};
 
-fn make_signed_tx(kp: &Keypair, nonce: u64, gas_price: u128) -> velochain_primitives::SignedTransaction {
+fn make_signed_tx(
+    kp: &Keypair,
+    nonce: u64,
+    gas_price: u128,
+) -> velochain_primitives::SignedTransaction {
     let tx = Transaction {
         tx_type: TxType::Legacy,
         chain_id: 27181,
@@ -62,9 +66,13 @@ fn test_pool_capacity() {
     let kp1 = Keypair::random();
     let kp2 = Keypair::random();
     let kp3 = Keypair::random();
-    pool.add_transaction(make_signed_tx(&kp1, 0, 1_000_000_000)).unwrap();
-    pool.add_transaction(make_signed_tx(&kp2, 0, 1_000_000_000)).unwrap();
-    assert!(pool.add_transaction(make_signed_tx(&kp3, 0, 1_000_000_000)).is_err());
+    pool.add_transaction(make_signed_tx(&kp1, 0, 1_000_000_000))
+        .unwrap();
+    pool.add_transaction(make_signed_tx(&kp2, 0, 1_000_000_000))
+        .unwrap();
+    assert!(pool
+        .add_transaction(make_signed_tx(&kp3, 0, 1_000_000_000))
+        .is_err());
 }
 
 #[test]
@@ -94,8 +102,10 @@ fn test_get_pending_ordering() {
     let kp2 = Keypair::random();
 
     // kp1 low gas price, kp2 high gas price
-    pool.add_transaction(make_signed_tx(&kp1, 0, 1_000_000_000)).unwrap();
-    pool.add_transaction(make_signed_tx(&kp2, 0, 5_000_000_000)).unwrap();
+    pool.add_transaction(make_signed_tx(&kp1, 0, 1_000_000_000))
+        .unwrap();
+    pool.add_transaction(make_signed_tx(&kp2, 0, 5_000_000_000))
+        .unwrap();
 
     let pending = pool.get_pending(10);
     assert_eq!(pending.len(), 2);
@@ -108,7 +118,8 @@ fn test_get_pending_max_count() {
     let pool = pool::TransactionPool::new();
     let kp = Keypair::random();
     for i in 0..5 {
-        pool.add_transaction(make_signed_tx(&kp, i, 1_000_000_000)).unwrap();
+        pool.add_transaction(make_signed_tx(&kp, i, 1_000_000_000))
+            .unwrap();
     }
     let pending = pool.get_pending(3);
     assert_eq!(pending.len(), 3);
@@ -118,7 +129,8 @@ fn test_get_pending_max_count() {
 fn test_get_game_actions() {
     let pool = pool::TransactionPool::new();
     let kp = Keypair::random();
-    pool.add_transaction(make_signed_tx(&kp, 0, 1_000_000_000)).unwrap();
+    pool.add_transaction(make_signed_tx(&kp, 0, 1_000_000_000))
+        .unwrap();
     pool.add_transaction(make_game_action_tx(&kp, 1)).unwrap();
 
     let actions = pool.get_game_actions();
@@ -130,8 +142,12 @@ fn test_get_game_actions() {
 fn test_remove_included() {
     let pool = pool::TransactionPool::new();
     let kp = Keypair::random();
-    let h1 = pool.add_transaction(make_signed_tx(&kp, 0, 1_000_000_000)).unwrap();
-    let h2 = pool.add_transaction(make_signed_tx(&kp, 1, 1_000_000_000)).unwrap();
+    let h1 = pool
+        .add_transaction(make_signed_tx(&kp, 0, 1_000_000_000))
+        .unwrap();
+    let h2 = pool
+        .add_transaction(make_signed_tx(&kp, 1, 1_000_000_000))
+        .unwrap();
     assert_eq!(pool.pending_count(), 2);
 
     pool.remove_included(&[h1]);
@@ -144,8 +160,10 @@ fn test_remove_included() {
 fn test_clear() {
     let pool = pool::TransactionPool::new();
     let kp = Keypair::random();
-    pool.add_transaction(make_signed_tx(&kp, 0, 1_000_000_000)).unwrap();
-    pool.add_transaction(make_signed_tx(&kp, 1, 1_000_000_000)).unwrap();
+    pool.add_transaction(make_signed_tx(&kp, 0, 1_000_000_000))
+        .unwrap();
+    pool.add_transaction(make_signed_tx(&kp, 1, 1_000_000_000))
+        .unwrap();
     assert_eq!(pool.pending_count(), 2);
     pool.clear();
     assert_eq!(pool.pending_count(), 0);
@@ -158,9 +176,11 @@ fn test_pending_nonce() {
     let addr = kp.address();
 
     assert_eq!(pool.pending_nonce(&addr), None);
-    pool.add_transaction(make_signed_tx(&kp, 0, 1_000_000_000)).unwrap();
+    pool.add_transaction(make_signed_tx(&kp, 0, 1_000_000_000))
+        .unwrap();
     assert_eq!(pool.pending_nonce(&addr), Some(1));
-    pool.add_transaction(make_signed_tx(&kp, 1, 1_000_000_000)).unwrap();
+    pool.add_transaction(make_signed_tx(&kp, 1, 1_000_000_000))
+        .unwrap();
     assert_eq!(pool.pending_nonce(&addr), Some(2));
 }
 
@@ -170,9 +190,12 @@ fn test_get_sender_txs() {
     let kp1 = Keypair::random();
     let kp2 = Keypair::random();
 
-    pool.add_transaction(make_signed_tx(&kp1, 0, 1_000_000_000)).unwrap();
-    pool.add_transaction(make_signed_tx(&kp1, 1, 1_000_000_000)).unwrap();
-    pool.add_transaction(make_signed_tx(&kp2, 0, 1_000_000_000)).unwrap();
+    pool.add_transaction(make_signed_tx(&kp1, 0, 1_000_000_000))
+        .unwrap();
+    pool.add_transaction(make_signed_tx(&kp1, 1, 1_000_000_000))
+        .unwrap();
+    pool.add_transaction(make_signed_tx(&kp2, 0, 1_000_000_000))
+        .unwrap();
 
     let kp1_txs = pool.get_sender_txs(&kp1.address());
     assert_eq!(kp1_txs.len(), 2);
@@ -189,11 +212,13 @@ fn test_multiple_senders_contiguous_nonces() {
 
     // kp1: nonces 0, 1, 2
     for i in 0..3 {
-        pool.add_transaction(make_signed_tx(&kp1, i, 1_000_000_000)).unwrap();
+        pool.add_transaction(make_signed_tx(&kp1, i, 1_000_000_000))
+            .unwrap();
     }
     // kp2: nonces 0, 1
     for i in 0..2 {
-        pool.add_transaction(make_signed_tx(&kp2, i, 2_000_000_000)).unwrap();
+        pool.add_transaction(make_signed_tx(&kp2, i, 2_000_000_000))
+            .unwrap();
     }
 
     let pending = pool.get_pending(100);

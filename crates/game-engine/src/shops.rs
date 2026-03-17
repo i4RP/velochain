@@ -111,9 +111,17 @@ impl DemandTracker {
 #[derive(Debug, Clone)]
 pub enum ShopResult {
     /// Purchase successful.
-    Bought { item_id: ItemDefId, quantity: u32, total_cost: u64 },
+    Bought {
+        item_id: ItemDefId,
+        quantity: u32,
+        total_cost: u64,
+    },
     /// Sale successful.
-    Sold { item_id: ItemDefId, quantity: u32, total_earned: u64 },
+    Sold {
+        item_id: ItemDefId,
+        quantity: u32,
+        total_earned: u64,
+    },
     /// Error.
     Error(ShopError),
 }
@@ -126,11 +134,19 @@ pub enum ShopError {
     /// Item not sold by this shop.
     ItemNotAvailable(ItemDefId),
     /// Not enough stock.
-    OutOfStock { item_id: ItemDefId, available: u32, requested: u32 },
+    OutOfStock {
+        item_id: ItemDefId,
+        available: u32,
+        requested: u32,
+    },
     /// Player can't afford it.
     InsufficientGold { required: u64, available: u64 },
     /// Player doesn't have the item to sell.
-    InsufficientItems { item_id: ItemDefId, required: u32, available: u32 },
+    InsufficientItems {
+        item_id: ItemDefId,
+        required: u32,
+        available: u32,
+    },
     /// Item cannot be sold to this shop.
     CannotSellItem(ItemDefId),
 }
@@ -417,7 +433,8 @@ impl ShopManager {
                 if let (Some(stock), Some(max_stock)) = (listing.stock, listing.max_stock) {
                     if stock < max_stock
                         && listing.restock_interval > 0
-                        && current_tick >= listing.last_restock_tick + listing.restock_interval as u64
+                        && current_tick
+                            >= listing.last_restock_tick + listing.restock_interval as u64
                     {
                         let new_stock = (stock + listing.restock_rate).min(max_stock);
                         listing.stock = Some(new_stock);
@@ -460,7 +477,10 @@ mod tests {
     fn test_buy_insufficient_gold() {
         let mut manager = ShopManager::default();
         let result = manager.buy_item(1, 20, 1, 0);
-        assert!(matches!(result, ShopResult::Error(ShopError::InsufficientGold { .. })));
+        assert!(matches!(
+            result,
+            ShopResult::Error(ShopError::InsufficientGold { .. })
+        ));
     }
 
     #[test]
@@ -468,7 +488,10 @@ mod tests {
         let mut manager = ShopManager::default();
         // Buy all stock
         let result = manager.buy_item(1, 20, 100, 100000);
-        assert!(matches!(result, ShopResult::Error(ShopError::OutOfStock { .. })));
+        assert!(matches!(
+            result,
+            ShopResult::Error(ShopError::OutOfStock { .. })
+        ));
     }
 
     #[test]
@@ -487,7 +510,10 @@ mod tests {
         let item_reg = ItemRegistry::default_registry();
         let mut manager = ShopManager::default();
         let result = manager.sell_item(1, 1, 5, 2, &item_reg);
-        assert!(matches!(result, ShopResult::Error(ShopError::InsufficientItems { .. })));
+        assert!(matches!(
+            result,
+            ShopResult::Error(ShopError::InsufficientItems { .. })
+        ));
     }
 
     #[test]
@@ -523,7 +549,10 @@ mod tests {
     fn test_restock() {
         let mut manager = ShopManager::default();
         // Buy all potions
-        while matches!(manager.buy_item(1, 20, 1, 100000), ShopResult::Bought { .. }) {}
+        while matches!(
+            manager.buy_item(1, 20, 1, 100000),
+            ShopResult::Bought { .. }
+        ) {}
 
         // Tick past restock interval
         manager.tick_shops(200);

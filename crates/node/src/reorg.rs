@@ -136,8 +136,11 @@ pub fn execute_reorg(
                     );
                 }
             }
-            info!("Reverted block {} ({} txs returned to pool)",
-                block_num, block.body.transactions.len());
+            info!(
+                "Reverted block {} ({} txs returned to pool)",
+                block_num,
+                block.body.transactions.len()
+            );
         }
     }
 

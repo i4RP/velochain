@@ -4,16 +4,16 @@
 //! using libp2p with gossipsub for message broadcasting.
 
 pub mod error;
+#[cfg(test)]
+mod multinode_tests;
 pub mod peer_manager;
 pub mod protocol;
 pub mod service;
 pub mod sync;
-#[cfg(test)]
-mod multinode_tests;
 
 pub use error::NetworkError;
 pub use peer_manager::PeerManager;
-pub use service::{NetworkService, NetworkEvent};
+pub use service::{NetworkEvent, NetworkService};
 pub use sync::SyncEngine;
 
 // Re-export libp2p types used by consumers

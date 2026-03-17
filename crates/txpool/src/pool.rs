@@ -97,7 +97,10 @@ impl TransactionPool {
             .txs
             .insert(nonce, tx);
 
-        debug!("Transaction added to pool: hash={}, sender={:?}, nonce={}", hash, sender, nonce);
+        debug!(
+            "Transaction added to pool: hash={}, sender={:?}, nonce={}",
+            hash, sender, nonce
+        );
 
         Ok(hash)
     }
@@ -170,7 +173,10 @@ impl TransactionPool {
         for hash in tx_hashes {
             self.remove_transaction(hash);
         }
-        debug!("Removed {} included transactions from pool", tx_hashes.len());
+        debug!(
+            "Removed {} included transactions from pool",
+            tx_hashes.len()
+        );
     }
 
     /// Get the number of pending transactions.
@@ -202,9 +208,9 @@ impl TransactionPool {
 
     /// Get the pending nonce for a sender (next expected nonce).
     pub fn pending_nonce(&self, sender: &Address) -> Option<u64> {
-        self.by_sender.get(sender).and_then(|queue| {
-            queue.txs.keys().last().map(|last_nonce| last_nonce + 1)
-        })
+        self.by_sender
+            .get(sender)
+            .and_then(|queue| queue.txs.keys().last().map(|last_nonce| last_nonce + 1))
     }
 
     /// Get all transactions for a specific sender.

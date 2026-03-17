@@ -270,10 +270,7 @@ impl PeerManager {
     /// Handle peer disconnection.
     pub fn on_peer_disconnected(&mut self, peer_id: &str) {
         if let Some(peer) = self.peers.remove(peer_id) {
-            info!(
-                "Peer disconnected: {} (score: {})",
-                peer_id, peer.score
-            );
+            info!("Peer disconnected: {} (score: {})", peer_id, peer.score);
         }
     }
 
@@ -369,7 +366,8 @@ impl PeerManager {
 
         // Clean up expired bans.
         let tick = self.current_tick;
-        self.banned.retain(|_, expiry| *expiry == 0 || tick < *expiry);
+        self.banned
+            .retain(|_, expiry| *expiry == 0 || tick < *expiry);
     }
 
     /// Get a snapshot of all peer scores.
@@ -474,10 +472,7 @@ mod tests {
         assert_eq!(pm.get_peer("peer1").unwrap().good_messages, 1);
 
         pm.record_event("peer1", ScoreEvent::Timeout);
-        assert_eq!(
-            pm.get_peer("peer1").unwrap().score,
-            INITIAL_SCORE + 10 - 10
-        );
+        assert_eq!(pm.get_peer("peer1").unwrap().score, INITIAL_SCORE + 10 - 10);
         assert_eq!(pm.get_peer("peer1").unwrap().bad_messages, 1);
     }
 

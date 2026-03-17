@@ -70,10 +70,7 @@ impl Keypair {
     }
 
     /// Sign a 32-byte message hash, returning (signature, recovery_id).
-    pub fn sign_hash(
-        &self,
-        hash: &B256,
-    ) -> Result<(Signature, RecoveryId), PrimitivesError> {
+    pub fn sign_hash(&self, hash: &B256) -> Result<(Signature, RecoveryId), PrimitivesError> {
         let (sig, recid) = self
             .signing_key
             .sign_prehash(hash.as_ref())
@@ -120,10 +117,7 @@ impl Keypair {
     }
 
     /// Load a keypair from a keystore file.
-    pub fn load_keystore(
-        path: &std::path::Path,
-        password: &str,
-    ) -> Result<Self, PrimitivesError> {
+    pub fn load_keystore(path: &std::path::Path, password: &str) -> Result<Self, PrimitivesError> {
         let data = std::fs::read_to_string(path)
             .map_err(|e| PrimitivesError::SignatureError(format!("Read keystore: {e}")))?;
         let keystore: serde_json::Value = serde_json::from_str(&data)
@@ -211,10 +205,9 @@ mod tests {
     #[test]
     fn test_keypair_from_hex() {
         // Well-known test key
-        let kp = Keypair::from_hex(
-            "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-        )
-        .unwrap();
+        let kp =
+            Keypair::from_hex("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+                .unwrap();
         // This is the first Hardhat test account
         assert_eq!(
             format!("{:?}", kp.address()).to_lowercase(),
@@ -224,10 +217,9 @@ mod tests {
 
     #[test]
     fn test_keypair_from_hex_with_prefix() {
-        let kp = Keypair::from_hex(
-            "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-        )
-        .unwrap();
+        let kp =
+            Keypair::from_hex("0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+                .unwrap();
         assert_eq!(
             format!("{:?}", kp.address()).to_lowercase(),
             "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"

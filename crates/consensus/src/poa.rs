@@ -3,11 +3,11 @@
 //! Validators take turns producing blocks in round-robin fashion.
 //! Each block corresponds to one game tick.
 
-use alloy_primitives::{Address, B256, B64, Bloom, U256};
+use alloy_primitives::{Address, Bloom, B256, B64, U256};
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use tracing::{debug, info, warn};
-use velochain_primitives::{BlockHeader, Block, Keypair, recover_signer, DEFAULT_BLOCK_GAS_LIMIT};
+use velochain_primitives::{recover_signer, Block, BlockHeader, Keypair, DEFAULT_BLOCK_GAS_LIMIT};
 
 use crate::{ConsensusEngine, ConsensusError};
 
@@ -48,13 +48,12 @@ pub struct PoaConsensus {
 
 impl PoaConsensus {
     /// Create a new PoA consensus engine with a validator keypair.
-    pub fn new_with_keypair(
-        keypair: Keypair,
-        validators: Vec<Address>,
-        config: PoaConfig,
-    ) -> Self {
+    pub fn new_with_keypair(keypair: Keypair, validators: Vec<Address>, config: PoaConfig) -> Self {
         let address = keypair.address();
-        info!("PoA consensus initialized with validator address: {:?}", address);
+        info!(
+            "PoA consensus initialized with validator address: {:?}",
+            address
+        );
         Self {
             keypair: Some(keypair),
             local_address: Some(address),
@@ -232,9 +231,7 @@ impl ConsensusEngine for PoaConsensus {
     }
 
     fn prepare_header(&self, parent: &BlockHeader) -> Result<BlockHeader, ConsensusError> {
-        let local_address = self
-            .local_address
-            .ok_or(ConsensusError::NotValidator)?;
+        let local_address = self.local_address.ok_or(ConsensusError::NotValidator)?;
 
         if !self.is_validator() {
             return Err(ConsensusError::NotValidator);
@@ -281,10 +278,7 @@ impl ConsensusEngine for PoaConsensus {
     }
 
     fn seal_block(&self, block: &mut Block) -> Result<(), ConsensusError> {
-        let keypair = self
-            .keypair
-            .as_ref()
-            .ok_or(ConsensusError::NotValidator)?;
+        let keypair = self.keypair.as_ref().ok_or(ConsensusError::NotValidator)?;
 
         // Sign the block hash with our validator private key.
         // The signature is stored in extra_data as: [32 bytes R | 32 bytes S | 1 byte V]

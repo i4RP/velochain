@@ -62,7 +62,10 @@ impl SessionManager {
                     // Reactivate existing session
                     session.last_activity = now;
                     session.is_active = true;
-                    info!("Session reactivated: address={}, session_id={}", address, existing_id);
+                    info!(
+                        "Session reactivated: address={}, session_id={}",
+                        address, existing_id
+                    );
                     return existing_id.clone();
                 }
             }

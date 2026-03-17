@@ -2,7 +2,7 @@
 //!
 //! Exposes counters and gauges for blocks, transactions, peers, and game ticks.
 
-use prometheus::{IntCounter, IntGauge, Histogram, HistogramOpts, Registry};
+use prometheus::{Histogram, HistogramOpts, IntCounter, IntGauge, Registry};
 
 /// Node-wide metrics collected via Prometheus.
 #[derive(Clone)]
@@ -28,15 +28,23 @@ pub struct NodeMetrics {
 impl NodeMetrics {
     /// Create and register all metrics with the given registry.
     pub fn new(registry: &Registry) -> Result<Self, prometheus::Error> {
-        let blocks_total = IntCounter::new("velochain_blocks_total", "Total blocks produced/imported")?;
+        let blocks_total =
+            IntCounter::new("velochain_blocks_total", "Total blocks produced/imported")?;
         let chain_height = IntGauge::new("velochain_chain_height", "Current chain height")?;
-        let transactions_total = IntCounter::new("velochain_transactions_total", "Total transactions processed")?;
+        let transactions_total = IntCounter::new(
+            "velochain_transactions_total",
+            "Total transactions processed",
+        )?;
         let txpool_size = IntGauge::new("velochain_txpool_size", "Current transaction pool size")?;
         let peer_count = IntGauge::new("velochain_peer_count", "Number of connected peers")?;
-        let game_ticks_total = IntCounter::new("velochain_game_ticks_total", "Total game ticks executed")?;
+        let game_ticks_total =
+            IntCounter::new("velochain_game_ticks_total", "Total game ticks executed")?;
         let block_production_seconds = Histogram::with_opts(
-            HistogramOpts::new("velochain_block_production_seconds", "Block production latency")
-                .buckets(vec![0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]),
+            HistogramOpts::new(
+                "velochain_block_production_seconds",
+                "Block production latency",
+            )
+            .buckets(vec![0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0]),
         )?;
         let game_tick_seconds = Histogram::with_opts(
             HistogramOpts::new("velochain_game_tick_seconds", "Game tick execution latency")

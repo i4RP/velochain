@@ -16,11 +16,14 @@ impl Plugin for TouchInputPlugin {
             .insert_resource(GestureState::default())
             .insert_resource(TouchUiScale::default())
             .add_event::<TouchGameAction>()
-            .add_systems(Update, (
-                process_touch_input,
-                update_virtual_joystick,
-                detect_gestures,
-            ));
+            .add_systems(
+                Update,
+                (
+                    process_touch_input,
+                    update_virtual_joystick,
+                    detect_gestures,
+                ),
+            );
     }
 }
 
@@ -198,10 +201,7 @@ pub enum Gesture {
         direction: SwipeDirection,
     },
     /// Pinch zoom (delta factor: >1 zoom in, <1 zoom out).
-    Pinch {
-        center: Vec2,
-        delta: f32,
-    },
+    Pinch { center: Vec2, delta: f32 },
 }
 
 /// Swipe direction.
@@ -217,7 +217,11 @@ impl SwipeDirection {
     /// Determine swipe direction from a displacement vector.
     pub fn from_delta(delta: Vec2) -> Self {
         if delta.x.abs() > delta.y.abs() {
-            if delta.x > 0.0 { Self::Right } else { Self::Left }
+            if delta.x > 0.0 {
+                Self::Right
+            } else {
+                Self::Left
+            }
         } else if delta.y > 0.0 {
             Self::Up
         } else {
@@ -344,10 +348,7 @@ fn update_virtual_joystick(
         return;
     }
 
-    let screen_width = windows
-        .get_single()
-        .map(|w| w.width())
-        .unwrap_or(1280.0);
+    let screen_width = windows.get_single().map(|w| w.width()).unwrap_or(1280.0);
 
     let half_width = screen_width / 2.0;
 
@@ -430,9 +431,7 @@ fn detect_gestures(
         // Detect swipe on release
         if let Some(tp) = gesture.touches.iter().find(|t| t.id == touch.id()) {
             let delta = tp.current_pos - tp.start_pos;
-            if delta.length() >= config.swipe_min_distance
-                && (now - tp.start_time) < 0.5
-            {
+            if delta.length() >= config.swipe_min_distance && (now - tp.start_time) < 0.5 {
                 let direction = SwipeDirection::from_delta(delta);
                 gesture.current_gesture = Some(Gesture::Swipe {
                     start: tp.start_pos,
@@ -511,12 +510,7 @@ mod tests {
     fn test_virtual_joystick_update() {
         let mut js = VirtualJoystick::default();
         js.active = true;
-        js.update(
-            Vec2::new(100.0, 100.0),
-            Vec2::new(100.0, 160.0),
-            10.0,
-            60.0,
-        );
+        js.update(Vec2::new(100.0, 100.0), Vec2::new(100.0, 160.0), 10.0, 60.0);
         assert!(js.magnitude > 0.0);
         assert!(js.direction.y > 0.0);
     }
@@ -524,12 +518,7 @@ mod tests {
     #[test]
     fn test_virtual_joystick_dead_zone() {
         let mut js = VirtualJoystick::default();
-        js.update(
-            Vec2::new(100.0, 100.0),
-            Vec2::new(105.0, 100.0),
-            10.0,
-            60.0,
-        );
+        js.update(Vec2::new(100.0, 100.0), Vec2::new(105.0, 100.0), 10.0, 60.0);
         assert_eq!(js.magnitude, 0.0);
         assert_eq!(js.direction, Vec2::ZERO);
     }
@@ -537,12 +526,7 @@ mod tests {
     #[test]
     fn test_virtual_joystick_max_magnitude() {
         let mut js = VirtualJoystick::default();
-        js.update(
-            Vec2::new(100.0, 100.0),
-            Vec2::new(300.0, 100.0),
-            10.0,
-            60.0,
-        );
+        js.update(Vec2::new(100.0, 100.0), Vec2::new(300.0, 100.0), 10.0, 60.0);
         assert_eq!(js.magnitude, 1.0);
     }
 
@@ -559,17 +543,35 @@ mod tests {
 
     #[test]
     fn test_swipe_direction_from_delta() {
-        assert_eq!(SwipeDirection::from_delta(Vec2::new(50.0, 0.0)), SwipeDirection::Right);
-        assert_eq!(SwipeDirection::from_delta(Vec2::new(-50.0, 0.0)), SwipeDirection::Left);
-        assert_eq!(SwipeDirection::from_delta(Vec2::new(0.0, 50.0)), SwipeDirection::Up);
-        assert_eq!(SwipeDirection::from_delta(Vec2::new(0.0, -50.0)), SwipeDirection::Down);
+        assert_eq!(
+            SwipeDirection::from_delta(Vec2::new(50.0, 0.0)),
+            SwipeDirection::Right
+        );
+        assert_eq!(
+            SwipeDirection::from_delta(Vec2::new(-50.0, 0.0)),
+            SwipeDirection::Left
+        );
+        assert_eq!(
+            SwipeDirection::from_delta(Vec2::new(0.0, 50.0)),
+            SwipeDirection::Up
+        );
+        assert_eq!(
+            SwipeDirection::from_delta(Vec2::new(0.0, -50.0)),
+            SwipeDirection::Down
+        );
     }
 
     #[test]
     fn test_swipe_direction_diagonal() {
         // Diagonal favors the larger axis
-        assert_eq!(SwipeDirection::from_delta(Vec2::new(60.0, 40.0)), SwipeDirection::Right);
-        assert_eq!(SwipeDirection::from_delta(Vec2::new(30.0, -50.0)), SwipeDirection::Down);
+        assert_eq!(
+            SwipeDirection::from_delta(Vec2::new(60.0, 40.0)),
+            SwipeDirection::Right
+        );
+        assert_eq!(
+            SwipeDirection::from_delta(Vec2::new(30.0, -50.0)),
+            SwipeDirection::Down
+        );
     }
 
     #[test]
@@ -630,7 +632,10 @@ mod tests {
                 end: Vec2::new(100.0, 0.0),
                 direction: SwipeDirection::Right,
             },
-            Gesture::Pinch { center: Vec2::ZERO, delta: 1.5 },
+            Gesture::Pinch {
+                center: Vec2::ZERO,
+                delta: 1.5,
+            },
         ];
         assert_eq!(gestures.len(), 5);
     }
@@ -638,11 +643,22 @@ mod tests {
     #[test]
     fn test_touch_game_actions() {
         let actions = vec![
-            TouchGameAction::Move { direction: Vec2::X, magnitude: 0.5 },
-            TouchGameAction::Interact { screen_pos: Vec2::ZERO },
-            TouchGameAction::QuickPickup { screen_pos: Vec2::ZERO },
-            TouchGameAction::ContextMenu { screen_pos: Vec2::ZERO },
-            TouchGameAction::SwipeMenu { direction: SwipeDirection::Up },
+            TouchGameAction::Move {
+                direction: Vec2::X,
+                magnitude: 0.5,
+            },
+            TouchGameAction::Interact {
+                screen_pos: Vec2::ZERO,
+            },
+            TouchGameAction::QuickPickup {
+                screen_pos: Vec2::ZERO,
+            },
+            TouchGameAction::ContextMenu {
+                screen_pos: Vec2::ZERO,
+            },
+            TouchGameAction::SwipeMenu {
+                direction: SwipeDirection::Up,
+            },
             TouchGameAction::Zoom { delta: 1.2 },
         ];
         assert_eq!(actions.len(), 6);

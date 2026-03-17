@@ -130,7 +130,11 @@ impl Database {
             };
             let tx_index_encoded = bincode::serialize(&tx_index)
                 .map_err(|e| StorageError::Serialization(e.to_string()))?;
-            self.put_cf(tables::cf::TRANSACTIONS, tx.hash.as_ref(), &tx_index_encoded)?;
+            self.put_cf(
+                tables::cf::TRANSACTIONS,
+                tx.hash.as_ref(),
+                &tx_index_encoded,
+            )?;
         }
 
         Ok(())
@@ -171,7 +175,10 @@ impl Database {
     }
 
     /// Get a block body by hash.
-    pub fn get_body(&self, hash: &[u8; 32]) -> Result<Option<velochain_primitives::BlockBody>, StorageError> {
+    pub fn get_body(
+        &self,
+        hash: &[u8; 32],
+    ) -> Result<Option<velochain_primitives::BlockBody>, StorageError> {
         match self.get_cf(tables::cf::BODIES, hash)? {
             Some(data) => {
                 let body = bincode::deserialize(&data)

@@ -185,7 +185,9 @@ impl Genesis {
 
         // Tick interval must be non-zero
         if self.config.tick_interval_ms == 0 {
-            return Err(GenesisValidationError("tick_interval_ms must be non-zero".into()));
+            return Err(GenesisValidationError(
+                "tick_interval_ms must be non-zero".into(),
+            ));
         }
 
         // Consensus engine must be "poa"
@@ -198,7 +200,9 @@ impl Genesis {
 
         // PoA period must be non-zero
         if self.config.consensus.period == 0 {
-            return Err(GenesisValidationError("consensus period must be non-zero".into()));
+            return Err(GenesisValidationError(
+                "consensus period must be non-zero".into(),
+            ));
         }
 
         // Gas limit must be non-zero
@@ -208,17 +212,23 @@ impl Genesis {
 
         // World size must be non-zero
         if self.config.world.size_chunks[0] == 0 || self.config.world.size_chunks[1] == 0 {
-            return Err(GenesisValidationError("world size_chunks must be non-zero".into()));
+            return Err(GenesisValidationError(
+                "world size_chunks must be non-zero".into(),
+            ));
         }
 
         // Max height must be non-zero
         if self.config.world.max_height == 0 {
-            return Err(GenesisValidationError("world max_height must be non-zero".into()));
+            return Err(GenesisValidationError(
+                "world max_height must be non-zero".into(),
+            ));
         }
 
         // EVM block gas limit must be non-zero
         if self.config.evm.block_gas_limit == 0 {
-            return Err(GenesisValidationError("evm block_gas_limit must be non-zero".into()));
+            return Err(GenesisValidationError(
+                "evm block_gas_limit must be non-zero".into(),
+            ));
         }
 
         // Precompile range must be valid

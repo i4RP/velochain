@@ -3,21 +3,19 @@
 //! Renders players, NPCs, and ground items as colored sprites.
 //! Each entity type has a distinct shape and color.
 
-use bevy::prelude::*;
 use crate::camera::LocalPlayer;
 use crate::terrain_render::TILE_PIXEL_SIZE;
+use bevy::prelude::*;
 
 /// Plugin for entity rendering.
 pub struct RendererPlugin;
 
 impl Plugin for RendererPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(EntityRegistry::default())
-            .add_systems(Update, (
-                player_movement,
-                update_entity_sprites,
-                animate_ground_items,
-            ));
+        app.insert_resource(EntityRegistry::default()).add_systems(
+            Update,
+            (player_movement, update_entity_sprites, animate_ground_items),
+        );
     }
 }
 
@@ -229,9 +227,7 @@ fn player_movement(
 }
 
 /// Update sprite colors based on entity health.
-fn update_entity_sprites(
-    mut query: Query<(&GameEntity, &mut Sprite)>,
-) {
+fn update_entity_sprites(mut query: Query<(&GameEntity, &mut Sprite)>) {
     for (entity, mut sprite) in query.iter_mut() {
         if !entity.is_alive {
             // Gray out dead entities
@@ -241,10 +237,7 @@ fn update_entity_sprites(
 }
 
 /// Animate ground items with a gentle bob.
-fn animate_ground_items(
-    time: Res<Time>,
-    mut query: Query<&mut Transform, With<GroundItemMarker>>,
-) {
+fn animate_ground_items(time: Res<Time>, mut query: Query<&mut Transform, With<GroundItemMarker>>) {
     for mut transform in query.iter_mut() {
         // Gentle floating animation
         let bob = (time.elapsed_secs() * 2.0).sin() * 2.0;
@@ -258,7 +251,9 @@ mod tests {
 
     #[test]
     fn test_npc_colors_all_types() {
-        let types = ["merchant", "guard", "wolf", "rabbit", "dragon", "skeleton", "unknown"];
+        let types = [
+            "merchant", "guard", "wolf", "rabbit", "dragon", "skeleton", "unknown",
+        ];
         for t in types {
             let _color = npc_color(t);
         }

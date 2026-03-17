@@ -28,7 +28,12 @@ pub enum GameAction {
     /// Interact with world object.
     Interact { target_entity_id: u64 },
     /// Place a block in the world.
-    PlaceBlock { x: i32, y: i32, z: i32, block_type: u16 },
+    PlaceBlock {
+        x: i32,
+        y: i32,
+        z: i32,
+        block_type: u16,
+    },
     /// Break a block in the world.
     BreakBlock { x: i32, y: i32, z: i32 },
     /// Craft an item.

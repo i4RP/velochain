@@ -11,7 +11,7 @@ use velochain_network::service::{NetworkConfig, NetworkService};
 use velochain_network::{Multiaddr, NetworkEvent};
 use velochain_node::{BlockProducer, Chain, ConfigFile, NodeMetrics, ShutdownController};
 use velochain_primitives::{BlockHeader, Genesis, Keypair};
-use velochain_rpc::{server::RpcConfig, RpcServer, SessionManager, new_event_channel};
+use velochain_rpc::{new_event_channel, server::RpcConfig, RpcServer, SessionManager};
 use velochain_state::WorldState;
 use velochain_storage::Database;
 use velochain_txpool::TransactionPool;
@@ -161,7 +161,15 @@ async fn main() -> anyhow::Result<()> {
             validator_key,
             bootnodes,
         } => {
-            cmd_run(datadir, rpc_addr, p2p_addr, validator, validator_key, bootnodes).await?;
+            cmd_run(
+                datadir,
+                rpc_addr,
+                p2p_addr,
+                validator,
+                validator_key,
+                bootnodes,
+            )
+            .await?;
         }
         Commands::Status { datadir } => {
             cmd_status(datadir).await?;
@@ -169,7 +177,11 @@ async fn main() -> anyhow::Result<()> {
         Commands::GenerateKey { output, password } => {
             cmd_generate_key(output, password)?;
         }
-        Commands::ImportKey { private_key, output, password } => {
+        Commands::ImportKey {
+            private_key,
+            output,
+            password,
+        } => {
             cmd_import_key(private_key, output, password)?;
         }
         Commands::ExportKey { keystore, password } => {
@@ -301,18 +313,16 @@ async fn cmd_run(
 
     // Restore game world from persisted state, or create fresh
     let game_world = match db.get_game_state(b"world") {
-        Ok(Some(data)) => {
-            match GameWorld::from_state(&data, genesis.config.world.seed) {
-                Ok(world) => {
-                    info!("Restored game world from persistent storage");
-                    Arc::new(world)
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to restore game world: {}, creating fresh", e);
-                    Arc::new(GameWorld::new(genesis.config.world.seed))
-                }
+        Ok(Some(data)) => match GameWorld::from_state(&data, genesis.config.world.seed) {
+            Ok(world) => {
+                info!("Restored game world from persistent storage");
+                Arc::new(world)
             }
-        }
+            Err(e) => {
+                tracing::warn!("Failed to restore game world: {}, creating fresh", e);
+                Arc::new(GameWorld::new(genesis.config.world.seed))
+            }
+        },
         _ => Arc::new(GameWorld::new(genesis.config.world.seed)),
     };
     let txpool = Arc::new(TransactionPool::new());
@@ -324,8 +334,9 @@ async fn cmd_run(
     };
 
     let consensus = if validator {
-        let key_hex = validator_key
-            .ok_or_else(|| anyhow::anyhow!("--validator-key is required when --validator is set"))?;
+        let key_hex = validator_key.ok_or_else(|| {
+            anyhow::anyhow!("--validator-key is required when --validator is set")
+        })?;
         let keypair = Keypair::from_hex(&key_hex)?;
         info!("Validator address: {:?}", keypair.address());
         Arc::new(PoaConsensus::new_with_keypair(
@@ -369,7 +380,8 @@ async fn cmd_run(
         chain.txpool().clone(),
         Some(event_tx),
         Some(session_manager),
-    ).await?;
+    )
+    .await?;
     info!("RPC server listening on {}", rpc_addr);
 
     // Start P2P network service
@@ -392,11 +404,8 @@ async fn cmd_run(
 
     // Start block producer if validator
     if validator {
-        let block_producer = BlockProducer::new(
-            chain.clone(),
-            genesis.config.tick_interval_ms,
-        )
-        .with_network(network.clone());
+        let block_producer = BlockProducer::new(chain.clone(), genesis.config.tick_interval_ms)
+            .with_network(network.clone());
 
         info!("Starting block producer (validator mode)");
         tokio::spawn(async move {
@@ -439,7 +448,11 @@ async fn cmd_run(
                 NetworkEvent::BodiesReceived(bodies) => {
                     info!("Received {} block bodies from peer", bodies.len());
                 }
-                NetworkEvent::PeerStatus { peer_id, best_block, .. } => {
+                NetworkEvent::PeerStatus {
+                    peer_id,
+                    best_block,
+                    ..
+                } => {
                     info!("Peer {} status: best_block={}", peer_id, best_block);
                 }
             }
@@ -464,7 +477,9 @@ async fn cmd_run(
     info!("Graceful shutdown initiated...");
 
     // Persist game world state before exit
-    let game_state = chain.game_world().serialize_state()
+    let game_state = chain
+        .game_world()
+        .serialize_state()
         .map_err(|e| anyhow::anyhow!("Failed to serialize game world: {e}"))?;
     if let Err(e) = chain.db().put_game_state(b"world", &game_state) {
         tracing::error!("Failed to persist game world on shutdown: {}", e);
@@ -543,9 +558,16 @@ async fn cmd_accounts(datadir: PathBuf) -> anyhow::Result<()> {
 
 async fn cmd_peers(rpc: String) -> anyhow::Result<()> {
     // Parse host:port from URL like http://host:port
-    let stripped = rpc.strip_prefix("http://").or_else(|| rpc.strip_prefix("https://")).unwrap_or(&rpc);
+    let stripped = rpc
+        .strip_prefix("http://")
+        .or_else(|| rpc.strip_prefix("https://"))
+        .unwrap_or(&rpc);
     let addr = if stripped.contains(':') {
-        stripped.split('/').next().unwrap_or("127.0.0.1:8545").to_string()
+        stripped
+            .split('/')
+            .next()
+            .unwrap_or("127.0.0.1:8545")
+            .to_string()
     } else {
         format!("{}:8545", stripped.split('/').next().unwrap_or("127.0.0.1"))
     };
@@ -603,21 +625,14 @@ async fn cmd_snapshot(datadir: PathBuf, output: PathBuf) -> anyhow::Result<()> {
 
     let db = Arc::new(Database::open(&datadir.join("db"))?);
     let game_world = match db.get_game_state(b"world") {
-        Ok(Some(data)) => {
-            match GameWorld::from_state(&data, genesis.config.world.seed) {
-                Ok(world) => Arc::new(world),
-                Err(_) => Arc::new(GameWorld::new(genesis.config.world.seed)),
-            }
-        }
+        Ok(Some(data)) => match GameWorld::from_state(&data, genesis.config.world.seed) {
+            Ok(world) => Arc::new(world),
+            Err(_) => Arc::new(GameWorld::new(genesis.config.world.seed)),
+        },
         _ => Arc::new(GameWorld::new(genesis.config.world.seed)),
     };
 
-    let meta = velochain_node::export_snapshot(
-        &db,
-        &game_world,
-        genesis.config.chain_id,
-        &output,
-    )?;
+    let meta = velochain_node::export_snapshot(&db, &game_world, genesis.config.chain_id, &output)?;
 
     println!("Snapshot exported successfully!");
     println!("  Block number: {}", meta.block_number);
@@ -639,12 +654,8 @@ async fn cmd_restore(datadir: PathBuf, snapshot_path: PathBuf) -> anyhow::Result
     let db = Arc::new(Database::open(&datadir.join("db"))?);
     let state = Arc::new(WorldState::new(db.clone()));
 
-    let (meta, _game_world) = velochain_node::import_snapshot(
-        &db,
-        &state,
-        &snapshot_path,
-        genesis.config.world.seed,
-    )?;
+    let (meta, _game_world) =
+        velochain_node::import_snapshot(&db, &state, &snapshot_path, genesis.config.world.seed)?;
 
     println!("Snapshot restored successfully!");
     println!("  Block number: {}", meta.block_number);
@@ -674,6 +685,9 @@ fn cmd_snapshot_info(snapshot_path: PathBuf) -> anyhow::Result<()> {
 fn cmd_config_init(output: PathBuf) -> anyhow::Result<()> {
     ConfigFile::write_default(&output)?;
     println!("Default configuration written to {:?}", output);
-    println!("Edit this file and use it with: velochain run --config {:?}", output);
+    println!(
+        "Edit this file and use it with: velochain run --config {:?}",
+        output
+    );
     Ok(())
 }

@@ -20,7 +20,11 @@ pub enum QuestObjective {
     /// Reach a specific location (within radius).
     Explore { x: f32, y: f32, radius: f32 },
     /// Deliver items to an NPC.
-    Deliver { item_id: ItemDefId, count: u32, npc_type: String },
+    Deliver {
+        item_id: ItemDefId,
+        count: u32,
+        npc_type: String,
+    },
     /// Talk to a specific NPC type.
     TalkTo { npc_type: String },
     /// Craft a specific item.
@@ -121,9 +125,17 @@ pub enum QuestResult {
     /// Quest accepted.
     Accepted(QuestId),
     /// Quest objective updated.
-    ProgressUpdated { quest_id: QuestId, objective_index: usize, current: u32, required: u32 },
+    ProgressUpdated {
+        quest_id: QuestId,
+        objective_index: usize,
+        current: u32,
+        required: u32,
+    },
     /// Quest completed.
-    Completed { quest_id: QuestId, reward: QuestReward },
+    Completed {
+        quest_id: QuestId,
+        reward: QuestReward,
+    },
     /// Error.
     Error(QuestError),
 }
@@ -169,10 +181,16 @@ impl QuestRegistry {
             id: 1,
             name: "First Steps".into(),
             description: "Explore the world around the spawn area.".into(),
-            objectives: vec![
-                QuestObjective::Explore { x: 50.0, y: 50.0, radius: 20.0 },
-            ],
-            reward: QuestReward { experience: 50, items: vec![(1, 1)], gold: 10 },
+            objectives: vec![QuestObjective::Explore {
+                x: 50.0,
+                y: 50.0,
+                radius: 20.0,
+            }],
+            reward: QuestReward {
+                experience: 50,
+                items: vec![(1, 1)],
+                gold: 10,
+            },
             required_level: 1,
             prerequisites: vec![],
             repeatable: false,
@@ -181,10 +199,15 @@ impl QuestRegistry {
             id: 2,
             name: "Gathering Wood".into(),
             description: "Collect wood for the village.".into(),
-            objectives: vec![
-                QuestObjective::Gather { item_id: 31, count: 5 },
-            ],
-            reward: QuestReward { experience: 80, items: vec![(20, 2)], gold: 20 },
+            objectives: vec![QuestObjective::Gather {
+                item_id: 31,
+                count: 5,
+            }],
+            reward: QuestReward {
+                experience: 80,
+                items: vec![(20, 2)],
+                gold: 20,
+            },
             required_level: 1,
             prerequisites: vec![],
             repeatable: true,
@@ -193,10 +216,15 @@ impl QuestRegistry {
             id: 3,
             name: "Wolf Menace".into(),
             description: "Wolves have been threatening the village. Defeat 3 wolves.".into(),
-            objectives: vec![
-                QuestObjective::Kill { npc_type: "wolf".into(), count: 3 },
-            ],
-            reward: QuestReward { experience: 150, items: vec![(2, 1)], gold: 50 },
+            objectives: vec![QuestObjective::Kill {
+                npc_type: "wolf".into(),
+                count: 3,
+            }],
+            reward: QuestReward {
+                experience: 150,
+                items: vec![(2, 1)],
+                gold: 50,
+            },
             required_level: 2,
             prerequisites: vec![1],
             repeatable: false,
@@ -207,10 +235,15 @@ impl QuestRegistry {
             id: 10,
             name: "Iron Supply".into(),
             description: "Gather iron ore for the blacksmith.".into(),
-            objectives: vec![
-                QuestObjective::Gather { item_id: 30, count: 10 },
-            ],
-            reward: QuestReward { experience: 200, items: vec![(11, 1)], gold: 100 },
+            objectives: vec![QuestObjective::Gather {
+                item_id: 30,
+                count: 10,
+            }],
+            reward: QuestReward {
+                experience: 200,
+                items: vec![(11, 1)],
+                gold: 100,
+            },
             required_level: 3,
             prerequisites: vec![],
             repeatable: true,
@@ -220,10 +253,20 @@ impl QuestRegistry {
             name: "Merchant's Request".into(),
             description: "Talk to the merchant and deliver 5 wood.".into(),
             objectives: vec![
-                QuestObjective::TalkTo { npc_type: "merchant".into() },
-                QuestObjective::Deliver { item_id: 31, count: 5, npc_type: "merchant".into() },
+                QuestObjective::TalkTo {
+                    npc_type: "merchant".into(),
+                },
+                QuestObjective::Deliver {
+                    item_id: 31,
+                    count: 5,
+                    npc_type: "merchant".into(),
+                },
             ],
-            reward: QuestReward { experience: 120, items: vec![(20, 3)], gold: 30 },
+            reward: QuestReward {
+                experience: 120,
+                items: vec![(20, 3)],
+                gold: 30,
+            },
             required_level: 2,
             prerequisites: vec![],
             repeatable: false,
@@ -232,10 +275,15 @@ impl QuestRegistry {
             id: 12,
             name: "Smith's Challenge".into(),
             description: "Craft an Iron Sword to prove your skill.".into(),
-            objectives: vec![
-                QuestObjective::Craft { item_id: 2, count: 1 },
-            ],
-            reward: QuestReward { experience: 250, items: vec![(30, 10)], gold: 75 },
+            objectives: vec![QuestObjective::Craft {
+                item_id: 2,
+                count: 1,
+            }],
+            reward: QuestReward {
+                experience: 250,
+                items: vec![(30, 10)],
+                gold: 75,
+            },
             required_level: 3,
             prerequisites: vec![10],
             repeatable: false,
@@ -246,10 +294,15 @@ impl QuestRegistry {
             id: 20,
             name: "Dragon Hunt".into(),
             description: "Slay the fearsome dragon that terrorizes the land.".into(),
-            objectives: vec![
-                QuestObjective::Kill { npc_type: "dragon".into(), count: 1 },
-            ],
-            reward: QuestReward { experience: 1000, items: vec![(32, 3), (21, 5)], gold: 500 },
+            objectives: vec![QuestObjective::Kill {
+                npc_type: "dragon".into(),
+                count: 1,
+            }],
+            reward: QuestReward {
+                experience: 1000,
+                items: vec![(32, 3), (21, 5)],
+                gold: 500,
+            },
             required_level: 10,
             prerequisites: vec![3],
             repeatable: false,
@@ -258,10 +311,15 @@ impl QuestRegistry {
             id: 21,
             name: "Skeleton Purge".into(),
             description: "Clear out the skeleton infestation. Defeat 10 skeletons.".into(),
-            objectives: vec![
-                QuestObjective::Kill { npc_type: "skeleton".into(), count: 10 },
-            ],
-            reward: QuestReward { experience: 500, items: vec![(3, 1)], gold: 200 },
+            objectives: vec![QuestObjective::Kill {
+                npc_type: "skeleton".into(),
+                count: 10,
+            }],
+            reward: QuestReward {
+                experience: 500,
+                items: vec![(3, 1)],
+                gold: 200,
+            },
             required_level: 5,
             prerequisites: vec![3],
             repeatable: true,
@@ -270,10 +328,15 @@ impl QuestRegistry {
             id: 22,
             name: "Master Crafter".into(),
             description: "Forge the legendary Dragon Slayer sword.".into(),
-            objectives: vec![
-                QuestObjective::Craft { item_id: 4, count: 1 },
-            ],
-            reward: QuestReward { experience: 2000, items: vec![], gold: 1000 },
+            objectives: vec![QuestObjective::Craft {
+                item_id: 4,
+                count: 1,
+            }],
+            reward: QuestReward {
+                experience: 2000,
+                items: vec![],
+                gold: 1000,
+            },
             required_level: 15,
             prerequisites: vec![12, 20],
             repeatable: false,
@@ -392,11 +455,7 @@ impl QuestRegistry {
     }
 
     /// Update quest progress for a kill event.
-    pub fn on_kill(
-        &self,
-        npc_type: &str,
-        state: &mut PlayerQuestState,
-    ) -> Vec<QuestResult> {
+    pub fn on_kill(&self, npc_type: &str, state: &mut PlayerQuestState) -> Vec<QuestResult> {
         let mut results = Vec::new();
         for active in &mut state.active {
             let quest = match self.get(active.quest_id) {
@@ -492,10 +551,7 @@ impl QuestRegistry {
     }
 
     /// Check and complete any quests that have all objectives done.
-    pub fn check_completions(
-        &self,
-        state: &mut PlayerQuestState,
-    ) -> Vec<QuestResult> {
+    pub fn check_completions(&self, state: &mut PlayerQuestState) -> Vec<QuestResult> {
         let mut results = Vec::new();
         let mut completed_indices = Vec::new();
 
@@ -554,7 +610,10 @@ mod tests {
         let mut state = PlayerQuestState::new();
         // Dragon Hunt requires level 10
         let result = registry.accept_quest(20, 1, &mut state, 0);
-        assert!(matches!(result, QuestResult::Error(QuestError::LevelTooLow { .. })));
+        assert!(matches!(
+            result,
+            QuestResult::Error(QuestError::LevelTooLow { .. })
+        ));
     }
 
     #[test]
@@ -563,7 +622,10 @@ mod tests {
         let mut state = PlayerQuestState::new();
         // Wolf Menace requires quest 1 completed
         let result = registry.accept_quest(3, 5, &mut state, 0);
-        assert!(matches!(result, QuestResult::Error(QuestError::PrerequisitesNotMet(_))));
+        assert!(matches!(
+            result,
+            QuestResult::Error(QuestError::PrerequisitesNotMet(_))
+        ));
 
         // Complete quest 1 first
         state.completed.push(1);
@@ -580,7 +642,10 @@ mod tests {
 
         let results = registry.on_kill("wolf", &mut state);
         assert_eq!(results.len(), 1);
-        if let QuestResult::ProgressUpdated { current, required, .. } = &results[0] {
+        if let QuestResult::ProgressUpdated {
+            current, required, ..
+        } = &results[0]
+        {
             assert_eq!(*current, 1);
             assert_eq!(*required, 3);
         }
@@ -600,7 +665,10 @@ mod tests {
 
         let completions = registry.check_completions(&mut state);
         assert_eq!(completions.len(), 1);
-        assert!(matches!(completions[0], QuestResult::Completed { quest_id: 3, .. }));
+        assert!(matches!(
+            completions[0],
+            QuestResult::Completed { quest_id: 3, .. }
+        ));
         assert!(state.is_completed(3));
         assert!(state.active.is_empty());
     }
@@ -656,7 +724,10 @@ mod tests {
         // First Steps is non-repeatable; simulate completion
         state.completed.push(1);
         let result = registry.accept_quest(1, 1, &mut state, 0);
-        assert!(matches!(result, QuestResult::Error(QuestError::AlreadyCompleted(1))));
+        assert!(matches!(
+            result,
+            QuestResult::Error(QuestError::AlreadyCompleted(1))
+        ));
     }
 
     #[test]
@@ -668,7 +739,10 @@ mod tests {
         registry.accept_quest(1, 1, &mut state, 0);
         registry.accept_quest(2, 1, &mut state, 0);
         let result = registry.accept_quest(10, 3, &mut state, 0);
-        assert!(matches!(result, QuestResult::Error(QuestError::TooManyActive)));
+        assert!(matches!(
+            result,
+            QuestResult::Error(QuestError::TooManyActive)
+        ));
     }
 
     #[test]

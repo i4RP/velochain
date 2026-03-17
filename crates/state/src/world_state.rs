@@ -59,9 +59,7 @@ impl WorldState {
                 let account: Account = serde_json::from_slice(&data)
                     .map_err(|e| StateError::Serialization(e.to_string()))?;
                 // Cache it
-                self.account_cache
-                    .write()
-                    .insert(*address, account.clone());
+                self.account_cache.write().insert(*address, account.clone());
                 Ok(Some(account))
             }
             None => Ok(None),
@@ -81,9 +79,7 @@ impl WorldState {
         self.dirty_accounts
             .write()
             .insert(*address, account.clone());
-        self.account_cache
-            .write()
-            .insert(*address, account.clone());
+        self.account_cache.write().insert(*address, account.clone());
         Ok(())
     }
 
@@ -110,9 +106,10 @@ impl WorldState {
     /// Add balance to an account.
     pub fn add_balance(&self, address: &Address, amount: U256) -> Result<(), StateError> {
         let mut account = self.get_or_create_account(address)?;
-        account.balance = account.balance.checked_add(amount).ok_or_else(|| {
-            StateError::InvalidTransition("Balance overflow".to_string())
-        })?;
+        account.balance = account
+            .balance
+            .checked_add(amount)
+            .ok_or_else(|| StateError::InvalidTransition("Balance overflow".to_string()))?;
         self.put_account(address, &account)
     }
 

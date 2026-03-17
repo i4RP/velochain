@@ -76,7 +76,11 @@ fn produce_block(chain: &Arc<Chain>) -> Block {
     let mut selected = Vec::new();
     let mut gas_used: u64 = 0;
     for tx in pending_txs {
-        let tx_gas = if tx.is_game_action() { 21_000 } else { tx.transaction.gas_limit };
+        let tx_gas = if tx.is_game_action() {
+            21_000
+        } else {
+            tx.transaction.gas_limit
+        };
         if gas_used + tx_gas > header.gas_limit {
             break;
         }
@@ -124,7 +128,11 @@ fn test_block_production_with_game_actions() {
     let move_tx = Transaction::new_game_action(
         chain.chain_id(),
         0, // nonce
-        GameAction::Move { x: 5000, y: 3000, z: 64000 },
+        GameAction::Move {
+            x: 5000,
+            y: 3000,
+            z: 64000,
+        },
     );
     let signed = move_tx.sign(&kp).unwrap();
     chain.txpool().add_transaction(signed).unwrap();
@@ -172,13 +180,20 @@ fn test_chain_state_persistence_across_blocks() {
 
     // Validator should have genesis balance
     let balance = chain.state().get_balance(&validator_addr).unwrap();
-    assert!(balance > U256::ZERO, "Validator should have genesis balance");
+    assert!(
+        balance > U256::ZERO,
+        "Validator should have genesis balance"
+    );
 
     // Submit a game action and produce block
     let tx = Transaction::new_game_action(
         chain.chain_id(),
         0,
-        GameAction::Move { x: 1000, y: 2000, z: 64000 },
+        GameAction::Move {
+            x: 1000,
+            y: 2000,
+            z: 64000,
+        },
     );
     let signed = tx.sign(&kp).unwrap();
     chain.txpool().add_transaction(signed).unwrap();
@@ -186,7 +201,10 @@ fn test_chain_state_persistence_across_blocks() {
 
     // Balance should have decreased (gas cost deducted)
     let new_balance = chain.state().get_balance(&validator_addr).unwrap();
-    assert!(new_balance <= balance, "Balance should decrease after gas deduction");
+    assert!(
+        new_balance <= balance,
+        "Balance should decrease after gas deduction"
+    );
 
     // Nonce should have incremented
     let nonce = chain.state().get_nonce(&validator_addr).unwrap();
@@ -200,7 +218,9 @@ fn test_transaction_receipt_storage_and_retrieval() {
     let tx = Transaction::new_game_action(
         chain.chain_id(),
         0,
-        GameAction::Chat { message: "Hello VeloChain!".to_string() },
+        GameAction::Chat {
+            message: "Hello VeloChain!".to_string(),
+        },
     );
     let signed = tx.sign(&kp).unwrap();
     let tx_hash = signed.hash;
@@ -228,7 +248,10 @@ fn test_game_world_state_root_changes_per_block() {
     let root_after = chain.game_world().state_root();
 
     // State root should change after a game tick
-    assert_ne!(root_before, root_after, "Game state root should change after a tick");
+    assert_ne!(
+        root_before, root_after,
+        "Game state root should change after a tick"
+    );
 }
 
 #[test]
@@ -238,11 +261,18 @@ fn test_consensus_block_seal_verification() {
     let block = produce_block(&chain);
 
     // Block should be sealed (extra_data = 65 bytes signature)
-    assert_eq!(block.header.extra_data.len(), 65, "Sealed block should have 65-byte signature");
+    assert_eq!(
+        block.header.extra_data.len(),
+        65,
+        "Sealed block should have 65-byte signature"
+    );
 
     // Verify the seal
     let signer = PoaConsensus::recover_block_signer(&block).unwrap();
-    assert_eq!(signer, block.header.beneficiary, "Signer should match beneficiary");
+    assert_eq!(
+        signer, block.header.beneficiary,
+        "Signer should match beneficiary"
+    );
 
     // Signer should be in the validator set
     let validators = chain.consensus().validators();
@@ -280,7 +310,11 @@ fn test_txpool_to_block_inclusion_flow() {
         let tx = Transaction::new_game_action(
             chain.chain_id(),
             i,
-            GameAction::Move { x: (i as i64 * 1000), y: 0, z: 64000 },
+            GameAction::Move {
+                x: (i as i64 * 1000),
+                y: 0,
+                z: 64000,
+            },
         );
         let signed = tx.sign(&kp).unwrap();
         chain.txpool().add_transaction(signed).unwrap();
@@ -301,7 +335,11 @@ fn test_snapshot_export_import_roundtrip() {
     let tx = Transaction::new_game_action(
         chain.chain_id(),
         0,
-        GameAction::Move { x: 1000, y: 2000, z: 64000 },
+        GameAction::Move {
+            x: 1000,
+            y: 2000,
+            z: 64000,
+        },
     );
     let signed = tx.sign(&kp).unwrap();
     chain.txpool().add_transaction(signed).unwrap();
@@ -341,11 +379,26 @@ fn test_metrics_recording() {
 
     // Encode to Prometheus text format and verify
     let text = metrics.encode(&registry);
-    assert!(text.contains("velochain_blocks_total 2"), "blocks_total should be 2");
-    assert!(text.contains("velochain_chain_height 2"), "chain_height should be 2");
-    assert!(text.contains("velochain_transactions_total 8"), "transactions_total should be 8");
-    assert!(text.contains("velochain_txpool_size 42"), "txpool_size should be 42");
-    assert!(text.contains("velochain_peer_count 7"), "peer_count should be 7");
+    assert!(
+        text.contains("velochain_blocks_total 2"),
+        "blocks_total should be 2"
+    );
+    assert!(
+        text.contains("velochain_chain_height 2"),
+        "chain_height should be 2"
+    );
+    assert!(
+        text.contains("velochain_transactions_total 8"),
+        "transactions_total should be 8"
+    );
+    assert!(
+        text.contains("velochain_txpool_size 42"),
+        "txpool_size should be 42"
+    );
+    assert!(
+        text.contains("velochain_peer_count 7"),
+        "peer_count should be 7"
+    );
 }
 
 #[test]
@@ -356,9 +409,16 @@ fn test_player_spawn_and_movement_via_game_actions() {
     let tx1 = Transaction::new_game_action(
         chain.chain_id(),
         0,
-        GameAction::Move { x: 10000, y: 20000, z: 64000 },
+        GameAction::Move {
+            x: 10000,
+            y: 20000,
+            z: 64000,
+        },
     );
-    chain.txpool().add_transaction(tx1.sign(&kp).unwrap()).unwrap();
+    chain
+        .txpool()
+        .add_transaction(tx1.sign(&kp).unwrap())
+        .unwrap();
     produce_block(&chain);
 
     assert_eq!(chain.game_world().player_count(), 1);
@@ -367,9 +427,16 @@ fn test_player_spawn_and_movement_via_game_actions() {
     let tx2 = Transaction::new_game_action(
         chain.chain_id(),
         1,
-        GameAction::Move { x: 15000, y: 25000, z: 64000 },
+        GameAction::Move {
+            x: 15000,
+            y: 25000,
+            z: 64000,
+        },
     );
-    chain.txpool().add_transaction(tx2.sign(&kp).unwrap()).unwrap();
+    chain
+        .txpool()
+        .add_transaction(tx2.sign(&kp).unwrap())
+        .unwrap();
     produce_block(&chain);
 
     // Player should still exist
@@ -390,16 +457,41 @@ fn test_multiple_players_in_same_world() {
 
     // Give player 2 some balance for gas
     let account2 = Account::with_balance(U256::from(1_000_000_000_000_000_000u128));
-    chain.state().put_account(&kp2.address(), &account2).unwrap();
+    chain
+        .state()
+        .put_account(&kp2.address(), &account2)
+        .unwrap();
     chain.state().commit().unwrap();
 
     // Player 1 moves
-    let tx1 = Transaction::new_game_action(chain.chain_id(), 0, GameAction::Move { x: 1000, y: 0, z: 64000 });
-    chain.txpool().add_transaction(tx1.sign(&kp1).unwrap()).unwrap();
+    let tx1 = Transaction::new_game_action(
+        chain.chain_id(),
+        0,
+        GameAction::Move {
+            x: 1000,
+            y: 0,
+            z: 64000,
+        },
+    );
+    chain
+        .txpool()
+        .add_transaction(tx1.sign(&kp1).unwrap())
+        .unwrap();
 
     // Player 2 moves
-    let tx2 = Transaction::new_game_action(chain.chain_id(), 0, GameAction::Move { x: 5000, y: 5000, z: 64000 });
-    chain.txpool().add_transaction(tx2.sign(&kp2).unwrap()).unwrap();
+    let tx2 = Transaction::new_game_action(
+        chain.chain_id(),
+        0,
+        GameAction::Move {
+            x: 5000,
+            y: 5000,
+            z: 64000,
+        },
+    );
+    chain
+        .txpool()
+        .add_transaction(tx2.sign(&kp2).unwrap())
+        .unwrap();
 
     produce_block(&chain);
 
@@ -423,7 +515,9 @@ fn test_chain_head_restore_from_db() {
         let game_state_root = game_world.state_root();
         let state = Arc::new(WorldState::new(db.clone()));
         for (addr, alloc) in &genesis.alloc {
-            state.put_account(addr, &Account::with_balance(alloc.balance)).unwrap();
+            state
+                .put_account(addr, &Account::with_balance(alloc.balance))
+                .unwrap();
         }
         state.commit().unwrap();
         let txpool = Arc::new(TransactionPool::new());
@@ -437,8 +531,12 @@ fn test_chain_head_restore_from_db() {
             genesis.config.consensus.validators.clone(),
             poa_config,
         ));
-        let chain = Arc::new(Chain::new(db, state, game_world, txpool, consensus, chain_id));
-        chain.init_genesis(BlockHeader::genesis(game_state_root)).unwrap();
+        let chain = Arc::new(Chain::new(
+            db, state, game_world, txpool, consensus, chain_id,
+        ));
+        chain
+            .init_genesis(BlockHeader::genesis(game_state_root))
+            .unwrap();
 
         produce_block(&chain);
         produce_block(&chain);
@@ -454,12 +552,10 @@ fn test_chain_head_restore_from_db() {
         let state = Arc::new(WorldState::new(db.clone()));
         let txpool = Arc::new(TransactionPool::new());
         let poa_config = PoaConfig::default();
-        let consensus = Arc::new(PoaConsensus::new_with_keypair(
-            kp,
-            vec![],
-            poa_config,
+        let consensus = Arc::new(PoaConsensus::new_with_keypair(kp, vec![], poa_config));
+        let chain = Arc::new(Chain::new(
+            db, state, game_world, txpool, consensus, chain_id,
         ));
-        let chain = Arc::new(Chain::new(db, state, game_world, txpool, consensus, chain_id));
         chain.restore_head().unwrap();
 
         assert_eq!(chain.block_number(), block_number);
@@ -472,12 +568,24 @@ fn test_nonce_enforcement_rejects_duplicate() {
 
     // Submit tx with nonce 0
     let tx0 = Transaction::new_game_action(chain.chain_id(), 0, GameAction::Respawn);
-    chain.txpool().add_transaction(tx0.sign(&kp).unwrap()).unwrap();
+    chain
+        .txpool()
+        .add_transaction(tx0.sign(&kp).unwrap())
+        .unwrap();
 
     // Try to submit another tx with the same nonce 0 → should fail
-    let tx0_dup = Transaction::new_game_action(chain.chain_id(), 0, GameAction::Chat { message: "dup".to_string() });
+    let tx0_dup = Transaction::new_game_action(
+        chain.chain_id(),
+        0,
+        GameAction::Chat {
+            message: "dup".to_string(),
+        },
+    );
     let result = chain.txpool().add_transaction(tx0_dup.sign(&kp).unwrap());
-    assert!(result.is_err(), "Duplicate nonce should be rejected by txpool");
+    assert!(
+        result.is_err(),
+        "Duplicate nonce should be rejected by txpool"
+    );
 }
 
 #[test]
@@ -505,7 +613,11 @@ fn test_game_world_tick_advances_state() {
     let world = GameWorld::new(42);
 
     let root_before = world.state_root();
-    assert_ne!(root_before, B256::ZERO, "Initial state root should be non-zero");
+    assert_ne!(
+        root_before,
+        B256::ZERO,
+        "Initial state root should be non-zero"
+    );
 
     // Tick without actions — NPC AI runs, events fire
     world.tick(&[]).unwrap();
@@ -513,7 +625,10 @@ fn test_game_world_tick_advances_state() {
 
     let root_after = world.state_root();
     // State root should change because NPC AI and events run each tick
-    assert_ne!(root_before, root_after, "State root should change after a tick");
+    assert_ne!(
+        root_before, root_after,
+        "State root should change after a tick"
+    );
 
     // Entity count should be > 0 (NPCs exist from initialization)
     assert!(world.entity_count() > 0, "Should have NPC entities");
@@ -539,7 +654,9 @@ fn test_end_to_end_node_init_and_produce_10_blocks() {
     // Step 2: Init world state with genesis allocations
     let state = Arc::new(WorldState::new(db.clone()));
     for (address, alloc) in &genesis.alloc {
-        state.put_account(address, &Account::with_balance(alloc.balance)).unwrap();
+        state
+            .put_account(address, &Account::with_balance(alloc.balance))
+            .unwrap();
     }
     state.commit().unwrap();
 
@@ -563,10 +680,16 @@ fn test_end_to_end_node_init_and_produce_10_blocks() {
     // Step 5: Create chain, init genesis
     let txpool = Arc::new(TransactionPool::new());
     let chain = Arc::new(Chain::new(
-        db.clone(), state.clone(), game_world.clone(), txpool.clone(), consensus.clone(),
+        db.clone(),
+        state.clone(),
+        game_world.clone(),
+        txpool.clone(),
+        consensus.clone(),
         genesis.config.chain_id,
     ));
-    chain.init_genesis(BlockHeader::genesis(game_state_root)).unwrap();
+    chain
+        .init_genesis(BlockHeader::genesis(game_state_root))
+        .unwrap();
     assert_eq!(chain.block_number(), 0);
 
     // Step 6: Produce 10 blocks, some with game actions
@@ -576,7 +699,11 @@ fn test_end_to_end_node_init_and_produce_10_blocks() {
             let tx = Transaction::new_game_action(
                 genesis.config.chain_id,
                 (i / 2) - 1, // nonce
-                GameAction::Move { x: (i as i64 * 1000), y: 0, z: 64000 },
+                GameAction::Move {
+                    x: (i as i64 * 1000),
+                    y: 0,
+                    z: 64000,
+                },
             );
             txpool.add_transaction(tx.sign(&kp).unwrap()).unwrap();
         }
@@ -609,13 +736,27 @@ fn test_end_to_end_with_respawn() {
     let (chain, kp, _dir) = setup_test_chain();
 
     // Spawn player
-    let tx1 = Transaction::new_game_action(chain.chain_id(), 0, GameAction::Move { x: 1000, y: 1000, z: 64000 });
-    chain.txpool().add_transaction(tx1.sign(&kp).unwrap()).unwrap();
+    let tx1 = Transaction::new_game_action(
+        chain.chain_id(),
+        0,
+        GameAction::Move {
+            x: 1000,
+            y: 1000,
+            z: 64000,
+        },
+    );
+    chain
+        .txpool()
+        .add_transaction(tx1.sign(&kp).unwrap())
+        .unwrap();
     produce_block(&chain);
 
     // Respawn player
     let tx2 = Transaction::new_game_action(chain.chain_id(), 1, GameAction::Respawn);
-    chain.txpool().add_transaction(tx2.sign(&kp).unwrap()).unwrap();
+    chain
+        .txpool()
+        .add_transaction(tx2.sign(&kp).unwrap())
+        .unwrap();
     produce_block(&chain);
 
     // Player should still exist
@@ -904,7 +1045,8 @@ fn test_keypair_operations() {
     let mut s = [0u8; 32];
     r.copy_from_slice(&sig_bytes[..32]);
     s.copy_from_slice(&sig_bytes[32..]);
-    let recovered = velochain_primitives::recover_signer(&msg, recid.to_byte() as u64, &r, &s).unwrap();
+    let recovered =
+        velochain_primitives::recover_signer(&msg, recid.to_byte() as u64, &r, &s).unwrap();
     assert_eq!(recovered, kp.address());
 
     // From hex roundtrip
