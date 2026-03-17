@@ -5,7 +5,11 @@
 
 use crate::ecs::*;
 use crate::error::GameEngineError;
+use crate::events::EventManager;
+use crate::items::ItemRegistry;
+use crate::npc_ai::SpawnManager;
 use crate::systems;
+use crate::terrain::WorldTerrain;
 use alloy_primitives::B256;
 use parking_lot::RwLock;
 use tracing::{debug, info};
@@ -19,71 +23,112 @@ pub struct GameWorld {
     current_tick: RwLock<u64>,
     /// World seed for deterministic generation.
     seed: u64,
+    /// Terrain data with chunk caching.
+    terrain: RwLock<WorldTerrain>,
+    /// NPC spawn manager.
+    spawn_manager: RwLock<SpawnManager>,
+    /// Game event manager.
+    event_manager: RwLock<EventManager>,
+    /// Item registry.
+    item_registry: ItemRegistry,
 }
 
 impl GameWorld {
     /// Create a new game world with the given seed.
     pub fn new(seed: u64) -> Self {
         let mut ecs = EcsWorld::new();
+        let mut terrain = WorldTerrain::new(seed);
+        let mut spawn_manager = SpawnManager::new();
+        let event_manager = EventManager::new();
+        let item_registry = ItemRegistry::default_registry();
 
-        // Spawn some initial NPCs
-        ecs.spawn(vec![
-            Component::Position(PositionComponent {
-                x: 10.0,
-                y: 10.0,
-                z: 0.0,
-            }),
-            Component::Health(HealthComponent {
-                current: 100.0,
-                maximum: 100.0,
-                is_dead: false,
-            }),
-            Component::Npc(NpcComponent {
-                npc_type: "merchant".to_string(),
-                behavior: NpcBehavior::Idle,
-                home_position: PositionComponent {
-                    x: 10.0,
-                    y: 10.0,
-                    z: 0.0,
-                },
-            }),
-        ]);
+        // Generate terrain around spawn
+        terrain.generate_spawn_area();
 
-        ecs.spawn(vec![
-            Component::Position(PositionComponent {
-                x: 50.0,
-                y: 50.0,
-                z: 0.0,
-            }),
-            Component::Health(HealthComponent {
-                current: 50.0,
-                maximum: 50.0,
-                is_dead: false,
-            }),
-            Component::Npc(NpcComponent {
-                npc_type: "guard".to_string(),
-                behavior: NpcBehavior::Patrol,
-                home_position: PositionComponent {
-                    x: 50.0,
-                    y: 50.0,
-                    z: 0.0,
-                },
-            }),
-            Component::Physics(PhysicsComponent {
-                velocity_x: 0.0,
-                velocity_y: 0.0,
-                velocity_z: 0.0,
-                mass: 80.0,
-                is_grounded: true,
-            }),
-        ]);
+        // Generate NPC spawn points
+        spawn_manager.generate_spawn_points(seed);
 
-        info!("Game world initialized with seed={}, entities={}", seed, ecs.entity_count());
+        // Spawn initial NPCs from spawn manager
+        let initial_spawns = spawn_manager.tick_spawns();
+        for (npc_type, position, waypoints) in initial_spawns {
+            if let Some(archetype) = spawn_manager.get_archetype(&npc_type) {
+                let mut components = vec![
+                    Component::Position(PositionComponent {
+                        x: position[0],
+                        y: position[1],
+                        z: position[2],
+                    }),
+                    Component::Health(HealthComponent {
+                        current: archetype.max_health,
+                        maximum: archetype.max_health,
+                        is_dead: false,
+                    }),
+                    Component::Npc(NpcComponent {
+                        npc_type: npc_type.clone(),
+                        behavior: match archetype.behavior_pattern {
+                            crate::npc_ai::BehaviorPattern::Passive => NpcBehavior::Idle,
+                            crate::npc_ai::BehaviorPattern::PatrolPassive
+                            | crate::npc_ai::BehaviorPattern::PatrolAggressive => NpcBehavior::Patrol,
+                            crate::npc_ai::BehaviorPattern::Guardian => NpcBehavior::Aggressive,
+                            crate::npc_ai::BehaviorPattern::Timid => NpcBehavior::Idle,
+                            crate::npc_ai::BehaviorPattern::Predator => NpcBehavior::Aggressive,
+                        },
+                        home_position: PositionComponent {
+                            x: position[0],
+                            y: position[1],
+                            z: position[2],
+                        },
+                    }),
+                    Component::Physics(PhysicsComponent {
+                        velocity_x: 0.0,
+                        velocity_y: 0.0,
+                        velocity_z: 0.0,
+                        mass: 80.0,
+                        is_grounded: true,
+                    }),
+                    Component::Combat(CombatComponent {
+                        attack: archetype.attack_damage,
+                        defense: archetype.attack_damage * 0.3,
+                        attack_range: archetype.attack_range,
+                        attack_cooldown: archetype.attack_cooldown,
+                        cooldown_remaining: 0,
+                        crit_chance: 0.0,
+                        crit_multiplier: 1.5,
+                    }),
+                    Component::AiState(AiStateComponent {
+                        state: NpcAiState::Idle { ticks_remaining: 10 },
+                        waypoints,
+                        leash_range: archetype.leash_range,
+                        aggro_range: archetype.aggro_range,
+                        move_speed: archetype.move_speed,
+                        experience_reward: archetype.experience_reward,
+                    }),
+                ];
+
+                // Merchants don't need combat stats
+                if archetype.attack_damage == 0.0 {
+                    components.retain(|c| !matches!(c, Component::Combat(_)));
+                }
+
+                ecs.spawn(components);
+            }
+        }
+
+        info!(
+            "Game world initialized with seed={}, entities={}, chunks={}",
+            seed,
+            ecs.entity_count(),
+            terrain.cached_chunk_count()
+        );
 
         Self {
             ecs: RwLock::new(ecs),
             current_tick: RwLock::new(0),
             seed,
+            terrain: RwLock::new(terrain),
+            spawn_manager: RwLock::new(spawn_manager),
+            event_manager: RwLock::new(event_manager),
+            item_registry,
         }
     }
 
@@ -91,11 +136,19 @@ impl GameWorld {
     pub fn from_state(data: &[u8], seed: u64) -> Result<Self, GameEngineError> {
         let ecs = EcsWorld::deserialize(data)
             .map_err(GameEngineError::Serialization)?;
+        let mut terrain = WorldTerrain::new(seed);
+        terrain.generate_spawn_area();
+        let mut spawn_manager = SpawnManager::new();
+        spawn_manager.generate_spawn_points(seed);
         let tick = 0; // Will be updated from chain state
         Ok(Self {
             ecs: RwLock::new(ecs),
             current_tick: RwLock::new(tick),
             seed,
+            terrain: RwLock::new(terrain),
+            spawn_manager: RwLock::new(spawn_manager),
+            event_manager: RwLock::new(EventManager::new()),
+            item_registry: ItemRegistry::default_registry(),
         })
     }
 
@@ -118,7 +171,76 @@ impl GameWorld {
         // 2. Run game systems (physics, AI, combat, etc.)
         systems::run_tick(&mut ecs, current_tick);
 
-        // 3. Compute the new game state hash
+        // 3. Process periodic events (day/night, weather, spawns)
+        {
+            let mut event_mgr = self.event_manager.write();
+            event_mgr.tick_periodic_events(current_tick, self.seed);
+        }
+
+        // 4. Tick NPC spawn manager
+        {
+            let mut spawn_mgr = self.spawn_manager.write();
+            let new_spawns = spawn_mgr.tick_spawns();
+            for (npc_type, position, waypoints) in new_spawns {
+                if let Some(archetype) = spawn_mgr.get_archetype(&npc_type) {
+                    let components = vec![
+                        Component::Position(PositionComponent {
+                            x: position[0],
+                            y: position[1],
+                            z: position[2],
+                        }),
+                        Component::Health(HealthComponent {
+                            current: archetype.max_health,
+                            maximum: archetype.max_health,
+                            is_dead: false,
+                        }),
+                        Component::Npc(NpcComponent {
+                            npc_type: npc_type.clone(),
+                            behavior: match archetype.behavior_pattern {
+                                crate::npc_ai::BehaviorPattern::Passive => NpcBehavior::Idle,
+                                crate::npc_ai::BehaviorPattern::PatrolPassive
+                                | crate::npc_ai::BehaviorPattern::PatrolAggressive => NpcBehavior::Patrol,
+                                crate::npc_ai::BehaviorPattern::Guardian => NpcBehavior::Aggressive,
+                                crate::npc_ai::BehaviorPattern::Timid => NpcBehavior::Idle,
+                                crate::npc_ai::BehaviorPattern::Predator => NpcBehavior::Aggressive,
+                            },
+                            home_position: PositionComponent {
+                                x: position[0],
+                                y: position[1],
+                                z: position[2],
+                            },
+                        }),
+                        Component::Physics(PhysicsComponent {
+                            velocity_x: 0.0,
+                            velocity_y: 0.0,
+                            velocity_z: 0.0,
+                            mass: 80.0,
+                            is_grounded: true,
+                        }),
+                        Component::Combat(CombatComponent {
+                            attack: archetype.attack_damage,
+                            defense: archetype.attack_damage * 0.3,
+                            attack_range: archetype.attack_range,
+                            attack_cooldown: archetype.attack_cooldown,
+                            cooldown_remaining: 0,
+                            crit_chance: 0.0,
+                            crit_multiplier: 1.5,
+                        }),
+                        Component::AiState(AiStateComponent {
+                            state: NpcAiState::Idle { ticks_remaining: 10 },
+                            waypoints,
+                            leash_range: archetype.leash_range,
+                            aggro_range: archetype.aggro_range,
+                            move_speed: archetype.move_speed,
+                            experience_reward: archetype.experience_reward,
+                        }),
+                    ];
+                    ecs.spawn(components);
+                }
+            }
+        }
+
+        // 5. Compute the new game state hash
         let state_hash = ecs.state_hash();
         let root = B256::from_slice(&state_hash);
 
@@ -254,6 +376,15 @@ impl GameWorld {
                 items: vec![],
                 max_slots: 20,
             }),
+            Component::Combat(CombatComponent::default()),
+            Component::Equipment(EquipmentComponent {
+                main_hand: None,
+                off_hand: None,
+                head: None,
+                chest: None,
+                legs: None,
+                boots: None,
+            }),
         ]);
 
         info!("Player spawned: address={}, entity_id={}", address, entity);
@@ -287,6 +418,26 @@ impl GameWorld {
     /// Get the world seed.
     pub fn seed(&self) -> u64 {
         self.seed
+    }
+
+    /// Get a reference to the terrain system.
+    pub fn terrain(&self) -> &RwLock<WorldTerrain> {
+        &self.terrain
+    }
+
+    /// Get a reference to the item registry.
+    pub fn item_registry(&self) -> &ItemRegistry {
+        &self.item_registry
+    }
+
+    /// Get a reference to the event manager.
+    pub fn event_manager(&self) -> &RwLock<EventManager> {
+        &self.event_manager
+    }
+
+    /// Get a reference to the spawn manager.
+    pub fn spawn_manager(&self) -> &RwLock<SpawnManager> {
+        &self.spawn_manager
     }
 
     /// Get the number of player entities.
