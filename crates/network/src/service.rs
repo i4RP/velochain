@@ -58,6 +58,10 @@ pub enum NetworkCommand {
     BroadcastTransaction(Box<velochain_primitives::SignedTransaction>),
     /// Publish a sync request (GetHeaders, GetBodies, etc.) to peers.
     PublishSyncRequest(Box<protocol::NetworkMessage>),
+    /// Request a specific block by number from peers.
+    RequestBlock(u64),
+    /// Send a block response (reply to a GetBlock request).
+    SendBlockResponse(Box<velochain_primitives::Block>),
     /// Connect to a peer.
     Dial(Multiaddr),
     /// Shutdown the network.
@@ -75,6 +79,10 @@ pub enum NetworkEvent {
     HeadersReceived(Vec<velochain_primitives::BlockHeader>),
     /// Received block bodies from a peer (sync response).
     BodiesReceived(Vec<velochain_primitives::BlockBody>),
+    /// A peer is requesting a specific block by number.
+    BlockRequested(u64),
+    /// A block response was received (reply to our GetBlock request).
+    BlockResponseReceived(Box<velochain_primitives::Block>),
     /// Received a peer's status message.
     PeerStatus {
         peer_id: PeerId,
@@ -202,6 +210,12 @@ impl NetworkService {
                                         NetworkMessage::BodiesResponse(bodies) => {
                                             let _ = event_tx.send(NetworkEvent::BodiesReceived(bodies));
                                         }
+                                        NetworkMessage::GetBlock { number } => {
+                                            let _ = event_tx.send(NetworkEvent::BlockRequested(number));
+                                        }
+                                        NetworkMessage::BlockResponse(Some(block)) => {
+                                            let _ = event_tx.send(NetworkEvent::BlockResponseReceived(Box::new(block)));
+                                        }
                                         NetworkMessage::Status { chain_id, best_block, best_hash, genesis_hash } => {
                                             let _ = event_tx.send(NetworkEvent::PeerStatus {
                                                 peer_id: PeerId::random(),
@@ -262,6 +276,24 @@ impl NetworkService {
                                     let topic = gossipsub::IdentTopic::new(protocol::topics::BLOCKS);
                                     if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic, data) {
                                         error!("Failed to publish sync request: {}", e);
+                                    }
+                                }
+                            }
+                            Some(NetworkCommand::RequestBlock(number)) => {
+                                let msg = NetworkMessage::GetBlock { number };
+                                if let Ok(data) = serde_json::to_vec(&msg) {
+                                    let topic = gossipsub::IdentTopic::new(protocol::topics::BLOCKS);
+                                    if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic, data) {
+                                        debug!("Failed to publish block request: {}", e);
+                                    }
+                                }
+                            }
+                            Some(NetworkCommand::SendBlockResponse(block)) => {
+                                let msg = NetworkMessage::BlockResponse(Some(*block));
+                                if let Ok(data) = serde_json::to_vec(&msg) {
+                                    let topic = gossipsub::IdentTopic::new(protocol::topics::BLOCKS);
+                                    if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic, data) {
+                                        debug!("Failed to publish block response: {}", e);
                                     }
                                 }
                             }
@@ -342,6 +374,23 @@ impl NetworkService {
         };
         self.command_tx
             .send(NetworkCommand::PublishSyncRequest(Box::new(msg)))
+            .map_err(|_| NetworkError::ChannelClosed)
+    }
+
+    /// Request a specific block by number from peers.
+    pub fn request_block(&self, number: u64) -> Result<(), NetworkError> {
+        self.command_tx
+            .send(NetworkCommand::RequestBlock(number))
+            .map_err(|_| NetworkError::ChannelClosed)
+    }
+
+    /// Send a block response to peers (answering a GetBlock request).
+    pub fn send_block_response(
+        &self,
+        block: velochain_primitives::Block,
+    ) -> Result<(), NetworkError> {
+        self.command_tx
+            .send(NetworkCommand::SendBlockResponse(Box::new(block)))
             .map_err(|_| NetworkError::ChannelClosed)
     }
 
