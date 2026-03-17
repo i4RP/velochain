@@ -9,6 +9,7 @@ pub mod error;
 pub mod server;
 pub mod eth_api;
 pub mod game_api;
+pub mod admin_api;
 pub mod subscriptions;
 
 pub use error::RpcError;

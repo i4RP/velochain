@@ -4,6 +4,7 @@
 //! WebSocket clients can use subscription endpoints for real-time
 //! game state streaming.
 
+use crate::admin_api::{AdminApiImpl, AdminApiServer};
 use crate::error::RpcError;
 use crate::eth_api::{EthApiImpl, EthApiServer};
 use crate::game_api::{GameApiImpl, GameApiServer};
@@ -29,6 +30,8 @@ pub struct RpcConfig {
     pub chain_id: u64,
     /// Maximum number of WebSocket connections.
     pub max_ws_connections: u32,
+    /// Whether to enable admin API endpoints.
+    pub enable_admin: bool,
 }
 
 impl Default for RpcConfig {
@@ -37,6 +40,7 @@ impl Default for RpcConfig {
             addr: "127.0.0.1:8545".parse().unwrap(),
             chain_id: velochain_primitives::DEFAULT_CHAIN_ID,
             max_ws_connections: 100,
+            enable_admin: false,
         }
     }
 }
@@ -62,7 +66,7 @@ impl RpcServer {
             .map_err(|e| RpcError::Server(e.to_string()))?;
 
         let eth_api = EthApiImpl::new(config.chain_id, db.clone(), state, txpool.clone());
-        let game_api = GameApiImpl::new(game_world.clone(), txpool, config.chain_id);
+        let game_api = GameApiImpl::new(game_world.clone(), txpool.clone(), config.chain_id);
 
         let mut module = jsonrpsee::RpcModule::new(());
         module
@@ -71,6 +75,20 @@ impl RpcServer {
         module
             .merge(game_api.into_rpc())
             .map_err(|e| RpcError::Server(e.to_string()))?;
+
+        // Register admin API if enabled
+        if config.enable_admin {
+            let admin_api = AdminApiImpl::new(
+                config.chain_id,
+                db.clone(),
+                game_world.clone(),
+                txpool.clone(),
+            );
+            module
+                .merge(admin_api.into_rpc())
+                .map_err(|e| RpcError::Server(e.to_string()))?;
+            info!("Admin API endpoints registered");
+        }
 
         // Register subscription APIs if event channel is provided
         if let Some(event_tx) = event_tx {

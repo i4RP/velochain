@@ -217,8 +217,8 @@ mod tests {
         .unwrap();
         // This is the first Hardhat test account
         assert_eq!(
-            format!("{:?}", kp.address()),
-            "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+            format!("{:?}", kp.address()).to_lowercase(),
+            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
         );
     }
 
@@ -229,8 +229,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            format!("{:?}", kp.address()),
-            "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+            format!("{:?}", kp.address()).to_lowercase(),
+            "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
         );
     }
 }

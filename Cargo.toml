@@ -68,6 +68,7 @@ async-trait = "0.1"
 # Utils
 thiserror = "2"
 anyhow = "1"
+toml = "0.8"
 clap = { version = "4", features = ["derive", "env"] }
 hex = "0.4"
 bytes = "1"
