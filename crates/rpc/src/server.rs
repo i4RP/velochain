@@ -5,7 +5,12 @@ use crate::eth_api::{EthApiImpl, EthApiServer};
 use crate::game_api::{GameApiImpl, GameApiServer};
 use jsonrpsee::server::Server;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tracing::info;
+use velochain_game_engine::GameWorld;
+use velochain_state::WorldState;
+use velochain_storage::Database;
+use velochain_txpool::TransactionPool;
 
 /// RPC server configuration.
 #[derive(Debug, Clone)]
@@ -29,15 +34,21 @@ impl Default for RpcConfig {
 pub struct RpcServer;
 
 impl RpcServer {
-    /// Start the RPC server.
-    pub async fn start(config: RpcConfig) -> Result<SocketAddr, RpcError> {
+    /// Start the RPC server with references to all subsystems.
+    pub async fn start(
+        config: RpcConfig,
+        db: Arc<Database>,
+        state: Arc<WorldState>,
+        game_world: Arc<GameWorld>,
+        txpool: Arc<TransactionPool>,
+    ) -> Result<SocketAddr, RpcError> {
         let server = Server::builder()
             .build(config.addr)
             .await
             .map_err(|e| RpcError::Server(e.to_string()))?;
 
-        let eth_api = EthApiImpl::new(config.chain_id);
-        let game_api = GameApiImpl::new();
+        let eth_api = EthApiImpl::new(config.chain_id, db, state, txpool.clone());
+        let game_api = GameApiImpl::new(game_world, txpool, config.chain_id);
 
         let mut module = jsonrpsee::RpcModule::new(());
         module

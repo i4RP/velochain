@@ -7,6 +7,7 @@ description = "JSON-RPC server for VeloChain - Ethereum-compatible RPC + game-sp
 
 [dependencies]
 velochain-primitives = { workspace = true }
+velochain-storage = { workspace = true }
 velochain-state = { workspace = true }
 velochain-txpool = { workspace = true }
 velochain-game-engine = { workspace = true }

@@ -73,6 +73,20 @@ impl Chain {
         Ok(())
     }
 
+    /// Restore the chain head from the database (call on node startup).
+    pub fn restore_head(&self) -> Result<(), NodeError> {
+        if let Some(number) = self.db.get_latest_block_number()? {
+            if let Some(hash) = self.db.get_block_hash_by_number(number)? {
+                if let Some(header) = self.db.get_header(&hash)? {
+                    info!("Restored chain head: block={}, hash=0x{}", number, hex::encode(hash));
+                    *self.head.write() = Some(header);
+                    return Ok(());
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Get the current chain head.
     pub fn head(&self) -> Option<BlockHeader> {
         self.head.read().clone()
@@ -101,8 +115,8 @@ impl Chain {
         for tx in &block.body.transactions {
             if tx.is_game_action() {
                 if let Some(action) = tx.game_action() {
-                    // Use a placeholder address since sender recovery isn't implemented yet
-                    game_actions.push(("0x0000000000000000000000000000000000000000".to_string(), action.clone()));
+                    let sender = tx.sender().map_err(|e| NodeError::Internal(format!("Failed to recover sender: {e}")))?;
+                    game_actions.push((format!("{:?}", sender), action.clone()));
                 }
             } else {
                 evm_txs.push(tx.clone());

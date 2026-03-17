@@ -7,12 +7,14 @@ pub mod block;
 pub mod transaction;
 pub mod account;
 pub mod genesis;
+pub mod crypto;
 pub mod error;
 
 pub use block::{Block, BlockHeader, BlockBody};
 pub use transaction::{Transaction, TxType, SignedTransaction};
 pub use account::Account;
 pub use genesis::Genesis;
+pub use crypto::{Keypair, recover_signer};
 pub use error::PrimitivesError;
 
 /// Chain ID for VeloChain (default).

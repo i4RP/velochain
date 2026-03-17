@@ -8,7 +8,7 @@ use tracing::info;
 use velochain_consensus::poa::{PoaConfig, PoaConsensus};
 use velochain_game_engine::GameWorld;
 use velochain_node::{BlockProducer, Chain};
-use velochain_primitives::{BlockHeader, Genesis};
+use velochain_primitives::{BlockHeader, Genesis, Keypair};
 use velochain_rpc::{server::RpcConfig, RpcServer};
 use velochain_state::WorldState;
 use velochain_storage::Database;
@@ -48,6 +48,9 @@ enum Commands {
         /// Run as validator (block producer).
         #[arg(long)]
         validator: bool,
+        /// Validator private key (hex). Required if --validator is set.
+        #[arg(long, env = "VELOCHAIN_VALIDATOR_KEY")]
+        validator_key: Option<String>,
         /// Boot node multiaddresses (comma separated).
         #[arg(long)]
         bootnodes: Option<String>,
@@ -81,9 +84,10 @@ async fn main() -> anyhow::Result<()> {
             rpc_addr,
             p2p_addr,
             validator,
+            validator_key,
             bootnodes,
         } => {
-            cmd_run(datadir, rpc_addr, p2p_addr, validator, bootnodes).await?;
+            cmd_run(datadir, rpc_addr, p2p_addr, validator, validator_key, bootnodes).await?;
         }
         Commands::Status { datadir } => {
             cmd_status(datadir).await?;
@@ -131,14 +135,14 @@ async fn cmd_init(datadir: PathBuf, genesis_path: Option<PathBuf>) -> anyhow::Re
 
     // Create chain and init genesis
     let txpool = Arc::new(TransactionPool::new());
-    let consensus = Arc::new(PoaConsensus::new(
-        None,
+    let poa_config = PoaConfig {
+        period: genesis.config.consensus.period,
+        epoch: genesis.config.consensus.epoch,
+        chain_id: genesis.config.chain_id,
+    };
+    let consensus = Arc::new(PoaConsensus::new_readonly(
         genesis.config.consensus.validators.clone(),
-        PoaConfig {
-            period: genesis.config.consensus.period,
-            epoch: genesis.config.consensus.epoch,
-            chain_id: genesis.config.chain_id,
-        },
+        poa_config,
     ));
 
     let chain = Chain::new(
@@ -173,6 +177,7 @@ async fn cmd_run(
     rpc_addr: String,
     _p2p_addr: String,
     validator: bool,
+    validator_key: Option<String>,
     _bootnodes: Option<String>,
 ) -> anyhow::Result<()> {
     info!("Starting VeloChain node...");
@@ -195,21 +200,28 @@ async fn cmd_run(
     let game_world = Arc::new(GameWorld::new(genesis.config.world.seed));
     let txpool = Arc::new(TransactionPool::new());
 
-    let local_addr = if validator {
-        genesis.config.consensus.validators.first().copied()
-    } else {
-        None
+    let poa_config = PoaConfig {
+        period: genesis.config.consensus.period,
+        epoch: genesis.config.consensus.epoch,
+        chain_id: genesis.config.chain_id,
     };
 
-    let consensus = Arc::new(PoaConsensus::new(
-        local_addr,
-        genesis.config.consensus.validators.clone(),
-        PoaConfig {
-            period: genesis.config.consensus.period,
-            epoch: genesis.config.consensus.epoch,
-            chain_id: genesis.config.chain_id,
-        },
-    ));
+    let consensus = if validator {
+        let key_hex = validator_key
+            .ok_or_else(|| anyhow::anyhow!("--validator-key is required when --validator is set"))?;
+        let keypair = Keypair::from_hex(&key_hex)?;
+        info!("Validator address: {:?}", keypair.address());
+        Arc::new(PoaConsensus::new_with_keypair(
+            keypair,
+            genesis.config.consensus.validators.clone(),
+            poa_config,
+        ))
+    } else {
+        Arc::new(PoaConsensus::new_readonly(
+            genesis.config.consensus.validators.clone(),
+            poa_config,
+        ))
+    };
 
     let chain = Arc::new(Chain::new(
         db,
@@ -220,12 +232,22 @@ async fn cmd_run(
         genesis.config.chain_id,
     ));
 
+    // Restore chain head from DB
+    chain.restore_head()?;
+    info!("Chain head at block {}", chain.block_number());
+
     // Start RPC server
     let rpc_config = RpcConfig {
         addr: rpc_addr.parse()?,
         chain_id: genesis.config.chain_id,
     };
-    let rpc_addr = RpcServer::start(rpc_config).await?;
+    let rpc_addr = RpcServer::start(
+        rpc_config,
+        chain.db().clone(),
+        chain.state().clone(),
+        chain.game_world().clone(),
+        chain.txpool().clone(),
+    ).await?;
     info!("RPC server listening on {}", rpc_addr);
 
     // Start block producer if validator

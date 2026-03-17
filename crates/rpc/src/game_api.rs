@@ -3,19 +3,16 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use velochain_game_engine::GameWorld;
+use velochain_primitives::transaction::{GameAction, Transaction};
+use velochain_primitives::Keypair;
+use velochain_txpool::TransactionPool;
 
-/// Game world query response types.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PlayerInfo {
-    pub entity_id: u64,
-    pub address: String,
-    pub position: [f32; 3],
-    pub health: f32,
-    pub max_health: f32,
-    pub level: u32,
-    pub is_alive: bool,
-}
+/// Re-export PlayerInfo from game engine for RPC responses.
+pub use velochain_game_engine::PlayerInfo;
 
+/// World information response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorldInfo {
     pub current_tick: u64,
@@ -48,52 +45,117 @@ pub trait GameApi {
     async fn submit_action(&self, action_type: String, params: serde_json::Value) -> RpcResult<String>;
 }
 
-/// Game API implementation.
-pub struct GameApiImpl;
+/// Game API implementation backed by actual game world.
+pub struct GameApiImpl {
+    game_world: Arc<GameWorld>,
+    txpool: Arc<TransactionPool>,
+    chain_id: u64,
+}
 
 impl GameApiImpl {
-    pub fn new() -> Self {
-        Self
+    pub fn new(game_world: Arc<GameWorld>, txpool: Arc<TransactionPool>, chain_id: u64) -> Self {
+        Self {
+            game_world,
+            txpool,
+            chain_id,
+        }
     }
 }
 
 #[jsonrpsee::core::async_trait]
 impl GameApiServer for GameApiImpl {
     async fn get_world_info(&self) -> RpcResult<WorldInfo> {
-        // TODO: Query actual game world
         Ok(WorldInfo {
-            current_tick: 0,
-            entity_count: 0,
-            player_count: 0,
-            seed: 42,
+            current_tick: self.game_world.current_tick(),
+            entity_count: self.game_world.entity_count(),
+            player_count: self.game_world.player_count(),
+            seed: self.game_world.seed(),
         })
     }
 
-    async fn get_player(&self, _address: String) -> RpcResult<Option<PlayerInfo>> {
-        // TODO: Query actual game world
-        Ok(None)
+    async fn get_player(&self, address: String) -> RpcResult<Option<PlayerInfo>> {
+        Ok(self.game_world.get_player_info(&address))
     }
 
     async fn get_current_tick(&self) -> RpcResult<u64> {
-        // TODO: Return actual tick
-        Ok(0)
+        Ok(self.game_world.current_tick())
     }
 
     async fn get_entity_count(&self) -> RpcResult<usize> {
-        // TODO: Return actual count
-        Ok(0)
+        Ok(self.game_world.entity_count())
     }
 
     async fn submit_action(
         &self,
-        _action_type: String,
-        _params: serde_json::Value,
+        action_type: String,
+        params: serde_json::Value,
     ) -> RpcResult<String> {
-        // TODO: Parse action, create tx, add to pool
-        Err(jsonrpsee::types::ErrorObjectOwned::owned(
-            -32000,
-            "Not yet implemented",
+        let action = parse_game_action(&action_type, params)?;
+
+        // Create a temporary keypair for unsigned game actions submitted via RPC.
+        // In production, the client should sign and submit via eth_sendRawTransaction.
+        let keypair = Keypair::random();
+        let tx = Transaction::new_game_action(self.chain_id, 0, action);
+        let signed = tx.sign(&keypair).map_err(|e| {
+            jsonrpsee::types::ErrorObjectOwned::owned(
+                -32000,
+                format!("Failed to sign action: {e}"),
+                None::<()>,
+            )
+        })?;
+
+        let hash = signed.hash;
+        self.txpool.add_transaction(signed).map_err(|e| {
+            jsonrpsee::types::ErrorObjectOwned::owned(
+                -32000,
+                format!("TxPool error: {e}"),
+                None::<()>,
+            )
+        })?;
+
+        Ok(format!("{:?}", hash))
+    }
+}
+
+fn parse_game_action(
+    action_type: &str,
+    params: serde_json::Value,
+) -> RpcResult<GameAction> {
+    match action_type {
+        "move" => {
+            let x = params.get("x").and_then(|v| v.as_i64()).unwrap_or(0);
+            let y = params.get("y").and_then(|v| v.as_i64()).unwrap_or(0);
+            let z = params.get("z").and_then(|v| v.as_i64()).unwrap_or(0);
+            Ok(GameAction::Move { x, y, z })
+        }
+        "attack" => {
+            let target = params
+                .get("target_entity_id")
+                .and_then(|v| v.as_u64())
+                .ok_or_else(|| {
+                    jsonrpsee::types::ErrorObjectOwned::owned(
+                        -32602,
+                        "Missing target_entity_id",
+                        None::<()>,
+                    )
+                })?;
+            Ok(GameAction::Attack {
+                target_entity_id: target,
+            })
+        }
+        "chat" => {
+            let message = params
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            Ok(GameAction::Chat { message })
+        }
+        "respawn" => Ok(GameAction::Respawn),
+        _ => Err(jsonrpsee::types::ErrorObjectOwned::owned(
+            -32602,
+            format!("Unknown action type: {action_type}"),
             None::<()>,
-        ))
+        )),
     }
 }

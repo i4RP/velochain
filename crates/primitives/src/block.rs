@@ -1,4 +1,5 @@
 use alloy_primitives::{Address, Bloom, B256, B64, U256};
+use alloy_rlp::Encodable;
 use serde::{Deserialize, Serialize};
 
 use crate::transaction::SignedTransaction;
@@ -44,13 +45,72 @@ pub struct BlockHeader {
     pub base_fee_per_gas: Option<u64>,
 }
 
+/// Manual RLP encoding for BlockHeader.
+/// We encode all fields in order as an RLP list, which is the standard
+/// Ethereum approach. We include the custom `game_state_root` field.
+impl Encodable for BlockHeader {
+    fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
+        alloy_rlp::Header {
+            list: true,
+            payload_length: self.rlp_payload_length(),
+        }
+        .encode(out);
+        self.parent_hash.encode(out);
+        self.ommers_hash.encode(out);
+        self.beneficiary.encode(out);
+        self.state_root.encode(out);
+        self.transactions_root.encode(out);
+        self.receipts_root.encode(out);
+        self.game_state_root.encode(out);
+        self.logs_bloom.encode(out);
+        self.difficulty.encode(out);
+        self.number.encode(out);
+        self.gas_limit.encode(out);
+        self.gas_used.encode(out);
+        self.timestamp.encode(out);
+        self.game_tick.encode(out);
+        self.extra_data.encode(out);
+        self.mix_hash.encode(out);
+        self.nonce.encode(out);
+        if let Some(base_fee) = self.base_fee_per_gas {
+            base_fee.encode(out);
+        }
+    }
+
+    fn length(&self) -> usize {
+        let payload = self.rlp_payload_length();
+        payload + alloy_rlp::length_of_length(payload)
+    }
+}
+
 impl BlockHeader {
-    /// Compute the hash of this block header.
+    fn rlp_payload_length(&self) -> usize {
+        self.parent_hash.length()
+            + self.ommers_hash.length()
+            + self.beneficiary.length()
+            + self.state_root.length()
+            + self.transactions_root.length()
+            + self.receipts_root.length()
+            + self.game_state_root.length()
+            + self.logs_bloom.length()
+            + self.difficulty.length()
+            + self.number.length()
+            + self.gas_limit.length()
+            + self.gas_used.length()
+            + self.timestamp.length()
+            + self.game_tick.length()
+            + self.extra_data.length()
+            + self.mix_hash.length()
+            + self.nonce.length()
+            + self.base_fee_per_gas.map_or(0, |v| v.length())
+    }
+
+    /// Compute the hash of this block header using RLP encoding (Ethereum-compatible).
     pub fn hash(&self) -> B256 {
         use sha3::{Digest, Keccak256};
-        let encoded = serde_json::to_vec(self).unwrap_or_default();
-        let hash = Keccak256::digest(&encoded);
-        B256::from_slice(&hash)
+        let mut buf = Vec::new();
+        self.encode(&mut buf);
+        B256::from_slice(&Keccak256::digest(&buf))
     }
 
     /// Create a genesis block header.
