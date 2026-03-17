@@ -6,6 +6,8 @@
 
 pub mod error;
 pub mod executor;
+#[cfg(test)]
+mod tests;
 
 pub use error::EvmError;
 pub use executor::EvmExecutor;

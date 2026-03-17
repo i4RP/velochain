@@ -5,6 +5,8 @@
 
 pub mod error;
 pub mod poa;
+#[cfg(test)]
+mod tests;
 
 pub use error::ConsensusError;
 pub use poa::PoaConsensus;
