@@ -7,6 +7,8 @@ use tracing::info;
 
 use velochain_consensus::poa::{PoaConfig, PoaConsensus};
 use velochain_game_engine::GameWorld;
+use velochain_network::service::{NetworkConfig, NetworkService};
+use velochain_network::{Multiaddr, NetworkEvent};
 use velochain_node::{BlockProducer, Chain};
 use velochain_primitives::{BlockHeader, Genesis, Keypair};
 use velochain_rpc::{server::RpcConfig, RpcServer};
@@ -175,10 +177,10 @@ async fn cmd_init(datadir: PathBuf, genesis_path: Option<PathBuf>) -> anyhow::Re
 async fn cmd_run(
     datadir: PathBuf,
     rpc_addr: String,
-    _p2p_addr: String,
+    p2p_addr: String,
     validator: bool,
     validator_key: Option<String>,
-    _bootnodes: Option<String>,
+    bootnodes: Option<String>,
 ) -> anyhow::Result<()> {
     info!("Starting VeloChain node...");
 
@@ -197,7 +199,23 @@ async fn cmd_run(
 
     // Create subsystems
     let state = Arc::new(WorldState::new(db.clone()));
-    let game_world = Arc::new(GameWorld::new(genesis.config.world.seed));
+
+    // Restore game world from persisted state, or create fresh
+    let game_world = match db.get_game_state(b"world") {
+        Ok(Some(data)) => {
+            match GameWorld::from_state(&data, genesis.config.world.seed) {
+                Ok(world) => {
+                    info!("Restored game world from persistent storage");
+                    Arc::new(world)
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to restore game world: {}, creating fresh", e);
+                    Arc::new(GameWorld::new(genesis.config.world.seed))
+                }
+            }
+        }
+        _ => Arc::new(GameWorld::new(genesis.config.world.seed)),
+    };
     let txpool = Arc::new(TransactionPool::new());
 
     let poa_config = PoaConfig {
@@ -250,12 +268,32 @@ async fn cmd_run(
     ).await?;
     info!("RPC server listening on {}", rpc_addr);
 
+    // Start P2P network service
+    let boot_nodes: Vec<Multiaddr> = bootnodes
+        .unwrap_or_default()
+        .split(',')
+        .filter(|s| !s.trim().is_empty())
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
+
+    let net_config = NetworkConfig {
+        listen_addr: p2p_addr.parse()?,
+        boot_nodes,
+        max_peers: 50,
+    };
+
+    let (network, mut net_events) = NetworkService::new(net_config).await?;
+    let network = Arc::new(network);
+    info!("P2P network started, peer_id={}", network.local_peer_id());
+
     // Start block producer if validator
     if validator {
         let block_producer = BlockProducer::new(
             chain.clone(),
             genesis.config.tick_interval_ms,
-        );
+        )
+        .with_network(network.clone());
+
         info!("Starting block producer (validator mode)");
         tokio::spawn(async move {
             if let Err(e) = block_producer.start().await {
@@ -264,11 +302,43 @@ async fn cmd_run(
         });
     }
 
+    // Spawn network event handler
+    let chain_for_net = chain.clone();
+    tokio::spawn(async move {
+        while let Some(event) = net_events.recv().await {
+            match event {
+                NetworkEvent::BlockReceived(block) => {
+                    info!(
+                        "Received block from network: number={}, hash={}",
+                        block.number(),
+                        block.hash()
+                    );
+                    if let Err(e) = chain_for_net.apply_block(&block) {
+                        tracing::warn!("Failed to apply received block: {}", e);
+                    }
+                }
+                NetworkEvent::TransactionReceived(tx) => {
+                    tracing::debug!("Received tx from network: hash={}", tx.hash);
+                    if let Err(e) = chain_for_net.txpool().add_transaction(*tx) {
+                        tracing::debug!("Failed to add received tx to pool: {}", e);
+                    }
+                }
+                NetworkEvent::PeerConnected(peer_id) => {
+                    info!("Peer connected: {}", peer_id);
+                }
+                NetworkEvent::PeerDisconnected(peer_id) => {
+                    info!("Peer disconnected: {}", peer_id);
+                }
+            }
+        }
+    });
+
     info!("VeloChain node running. Press Ctrl+C to stop.");
 
     // Wait for shutdown signal
     tokio::signal::ctrl_c().await?;
     info!("Shutting down...");
+    let _ = network.shutdown();
 
     Ok(())
 }

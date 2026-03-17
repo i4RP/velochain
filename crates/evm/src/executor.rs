@@ -14,6 +14,7 @@ use revm::{
 };
 use tracing::debug;
 use velochain_primitives::SignedTransaction;
+use velochain_state::WorldState;
 
 /// Result of executing a transaction through the EVM.
 #[derive(Debug, Clone)]
@@ -91,13 +92,17 @@ impl EvmExecutor {
             ));
         }
 
+        // Recover sender from ECDSA signature
+        let sender = tx
+            .sender()
+            .map_err(|e| EvmError::InvalidTransaction(format!("Failed to recover sender: {e}")))?;
+
         let tx_data = &tx.transaction;
 
         let mut evm = Evm::builder()
             .with_db(&mut self.db)
             .modify_tx_env(|tx_env| {
-                // For now use a placeholder caller since signature recovery isn't implemented yet
-                tx_env.caller = Address::ZERO;
+                tx_env.caller = sender;
                 tx_env.transact_to = match tx_data.to {
                     Some(to) => TransactTo::Call(to),
                     None => TransactTo::Create,
@@ -162,6 +167,43 @@ impl EvmExecutor {
                 Err(EvmError::Halt(format!("{:?}, gas_used={}", reason, gas_used)))
             }
         }
+    }
+
+    /// Load an account from WorldState into the EVM's in-memory DB.
+    /// Call this before executing transactions to ensure the EVM has
+    /// the correct account state.
+    pub fn load_account(&mut self, address: Address, world_state: &WorldState) {
+        if let Ok(Some(account)) = world_state.get_account(&address) {
+            let info = AccountInfo {
+                balance: account.balance,
+                nonce: account.nonce,
+                code_hash: B256::ZERO,
+                code: None,
+            };
+            self.db.insert_account_info(address, info);
+        }
+    }
+
+    /// Flush EVM state changes back to WorldState after block execution.
+    /// This syncs balances and nonces modified by EVM transactions.
+    pub fn flush_to_state(&self, world_state: &WorldState) -> Result<(), EvmError> {
+        for (address, db_account) in &self.db.accounts {
+            let info = &db_account.info;
+            let mut account = world_state
+                .get_or_create_account(address)
+                .map_err(|e| EvmError::Internal(format!("State read error: {e}")))?;
+            account.balance = info.balance;
+            account.nonce = info.nonce;
+            world_state
+                .put_account(address, &account)
+                .map_err(|e| EvmError::Internal(format!("State write error: {e}")))?;
+        }
+        Ok(())
+    }
+
+    /// Reset the in-memory EVM database for a new block.
+    pub fn reset(&mut self) {
+        self.db = CacheDB::new(EmptyDB::default());
     }
 
     /// Get an account's balance from the EVM state.

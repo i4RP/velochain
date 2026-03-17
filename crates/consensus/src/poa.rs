@@ -7,7 +7,7 @@ use alloy_primitives::{Address, B256, B64, Bloom, U256};
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use tracing::{debug, info, warn};
-use velochain_primitives::{BlockHeader, Block, Keypair, DEFAULT_BLOCK_GAS_LIMIT};
+use velochain_primitives::{BlockHeader, Block, Keypair, recover_signer, DEFAULT_BLOCK_GAS_LIMIT};
 
 use crate::{ConsensusEngine, ConsensusError};
 
@@ -104,6 +104,35 @@ impl PoaConsensus {
         *tick += 1;
         *tick
     }
+
+    /// Recover the signer address from a sealed block's extra_data.
+    ///
+    /// The signature is stored as 65 bytes: [32 R | 32 S | 1 V].
+    /// We recompute the header hash *without* the signature (by temporarily
+    /// clearing extra_data) and then recover the signer from the signature.
+    pub fn recover_block_signer(block: &Block) -> Result<Address, ConsensusError> {
+        let extra = &block.header.extra_data;
+        if extra.len() != 65 {
+            return Err(ConsensusError::InvalidSignature(format!(
+                "extra_data must be 65 bytes for a sealed block, got {}",
+                extra.len()
+            )));
+        }
+
+        let mut r = [0u8; 32];
+        let mut s = [0u8; 32];
+        r.copy_from_slice(&extra[..32]);
+        s.copy_from_slice(&extra[32..64]);
+        let v = extra[64] as u64;
+
+        // Compute block hash without signature (clear extra_data temporarily)
+        let mut header_copy = block.header.clone();
+        header_copy.extra_data = Vec::new();
+        let unsigned_hash = header_copy.hash();
+
+        recover_signer(&unsigned_hash, v, &r, &s)
+            .map_err(|e| ConsensusError::InvalidSignature(format!("Recovery failed: {e}")))
+    }
 }
 
 #[async_trait]
@@ -156,6 +185,41 @@ impl ConsensusEngine for PoaConsensus {
             "Header verified: block={}, tick={}, validator={}",
             header.number, header.game_tick, header.beneficiary
         );
+
+        Ok(())
+    }
+
+    fn verify_block(&self, block: &Block, parent: &BlockHeader) -> Result<(), ConsensusError> {
+        self.verify_header(&block.header, parent)?;
+
+        // Genesis block (number 0) has no signature
+        if block.header.number == 0 {
+            return Ok(());
+        }
+
+        // Verify block seal signature if present
+        if !block.header.extra_data.is_empty() {
+            let signer = Self::recover_block_signer(block)?;
+
+            // Check that signer is in the validator set
+            let validators = self.validators.read();
+            if !validators.contains(&signer) {
+                return Err(ConsensusError::UnknownValidator(format!("{:?}", signer)));
+            }
+
+            // Check that signer matches the block's beneficiary
+            if signer != block.header.beneficiary {
+                return Err(ConsensusError::InvalidSignature(format!(
+                    "Signer {:?} does not match beneficiary {:?}",
+                    signer, block.header.beneficiary
+                )));
+            }
+
+            debug!(
+                "Block seal verified: number={}, signer={:?}",
+                block.header.number, signer
+            );
+        }
 
         Ok(())
     }

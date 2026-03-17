@@ -8,8 +8,9 @@
 
 use std::sync::Arc;
 use tokio::time::{interval, Duration};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use velochain_consensus::ConsensusEngine;
+use velochain_network::NetworkService;
 use velochain_primitives::Block;
 
 use crate::chain::Chain;
@@ -20,6 +21,8 @@ pub struct BlockProducer {
     chain: Arc<Chain>,
     /// Block interval in milliseconds.
     block_interval_ms: u64,
+    /// Optional network service for broadcasting blocks.
+    network: Option<Arc<NetworkService>>,
 }
 
 impl BlockProducer {
@@ -28,7 +31,14 @@ impl BlockProducer {
         Self {
             chain,
             block_interval_ms,
+            network: None,
         }
+    }
+
+    /// Set the network service for block broadcasting.
+    pub fn with_network(mut self, network: Arc<NetworkService>) -> Self {
+        self.network = Some(network);
+        self
     }
 
     /// Start the block production loop.
@@ -57,6 +67,13 @@ impl BlockProducer {
                         block.header.game_tick,
                         block.hash()
                     );
+
+                    // Broadcast block to network peers
+                    if let Some(ref network) = self.network {
+                        if let Err(e) = network.broadcast_block(block) {
+                            warn!("Failed to broadcast block: {}", e);
+                        }
+                    }
                 }
                 Err(e) => {
                     error!("Failed to produce block: {}", e);

@@ -126,6 +126,18 @@ impl Chain {
         // Execute EVM transactions
         {
             let mut evm = self.evm.lock();
+            evm.reset(); // Clean slate for this block
+
+            // Load sender accounts into EVM before execution
+            for tx in &evm_txs {
+                if let Ok(sender) = tx.sender() {
+                    evm.load_account(sender, &self.state);
+                }
+                if let Some(to) = tx.transaction.to {
+                    evm.load_account(to, &self.state);
+                }
+            }
+
             for tx in &evm_txs {
                 match evm.execute_tx(tx) {
                     Ok(outcome) => {
@@ -139,15 +151,27 @@ impl Chain {
                     }
                 }
             }
+
+            // Flush EVM state changes back to WorldState
+            if let Err(e) = evm.flush_to_state(&self.state) {
+                warn!("Failed to flush EVM state: {}", e);
+            }
         }
 
         // 3. Run game tick with player actions
         let _game_state_root = self.game_world.tick(&game_actions)?;
 
-        // 4. Commit state changes
+        // 4. Persist game world state to database
+        if let Ok(game_data) = self.game_world.serialize_state() {
+            if let Err(e) = self.db.put_game_state(b"world", &game_data) {
+                warn!("Failed to persist game state: {}", e);
+            }
+        }
+
+        // 5. Commit account state changes to persistent storage
         let state_root = self.state.commit()?;
 
-        // 5. Store block
+        // 6. Store block
         self.db.put_block(block)?;
         self.db.put_latest_block_number(block.number())?;
 

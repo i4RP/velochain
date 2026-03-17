@@ -156,7 +156,7 @@ impl EcsWorld {
     pub fn entities_with(&self, matcher: fn(&Component) -> bool) -> Vec<EntityId> {
         self.entities
             .iter()
-            .filter(|(_, components)| components.iter().any(|c| matcher(c)))
+            .filter(|(_, components)| components.iter().any(&matcher))
             .map(|(id, _)| *id)
             .collect()
     }

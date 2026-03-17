@@ -57,9 +57,9 @@ pub struct NetworkService {
 #[derive(Debug)]
 pub enum NetworkCommand {
     /// Broadcast a block to all peers.
-    BroadcastBlock(velochain_primitives::Block),
+    BroadcastBlock(Box<velochain_primitives::Block>),
     /// Broadcast a transaction to all peers.
-    BroadcastTransaction(velochain_primitives::SignedTransaction),
+    BroadcastTransaction(Box<velochain_primitives::SignedTransaction>),
     /// Connect to a peer.
     Dial(Multiaddr),
     /// Shutdown the network.
@@ -70,9 +70,9 @@ pub enum NetworkCommand {
 #[derive(Debug)]
 pub enum NetworkEvent {
     /// A new block was received from a peer.
-    BlockReceived(velochain_primitives::Block),
+    BlockReceived(Box<velochain_primitives::Block>),
     /// A new transaction was received from a peer.
-    TransactionReceived(velochain_primitives::SignedTransaction),
+    TransactionReceived(Box<velochain_primitives::SignedTransaction>),
     /// A peer connected.
     PeerConnected(PeerId),
     /// A peer disconnected.
@@ -180,10 +180,10 @@ impl NetworkService {
                                 if let Ok(msg) = serde_json::from_slice::<NetworkMessage>(&message.data) {
                                     match msg {
                                         NetworkMessage::NewBlock(block) => {
-                                            let _ = event_tx.send(NetworkEvent::BlockReceived(block));
+                                            let _ = event_tx.send(NetworkEvent::BlockReceived(Box::new(block)));
                                         }
                                         NetworkMessage::NewTransaction(tx) => {
-                                            let _ = event_tx.send(NetworkEvent::TransactionReceived(tx));
+                                            let _ = event_tx.send(NetworkEvent::TransactionReceived(Box::new(tx)));
                                         }
                                         _ => {}
                                     }
@@ -214,7 +214,7 @@ impl NetworkService {
                     cmd = command_rx.recv() => {
                         match cmd {
                             Some(NetworkCommand::BroadcastBlock(block)) => {
-                                let msg = NetworkMessage::NewBlock(block);
+                                let msg = NetworkMessage::NewBlock(*block);
                                 if let Ok(data) = serde_json::to_vec(&msg) {
                                     let topic = gossipsub::IdentTopic::new(protocol::topics::BLOCKS);
                                     if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic, data) {
@@ -223,7 +223,7 @@ impl NetworkService {
                                 }
                             }
                             Some(NetworkCommand::BroadcastTransaction(tx)) => {
-                                let msg = NetworkMessage::NewTransaction(tx);
+                                let msg = NetworkMessage::NewTransaction(*tx);
                                 if let Ok(data) = serde_json::to_vec(&msg) {
                                     let topic = gossipsub::IdentTopic::new(protocol::topics::TRANSACTIONS);
                                     if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic, data) {
@@ -267,7 +267,7 @@ impl NetworkService {
     /// Broadcast a block to the network.
     pub fn broadcast_block(&self, block: velochain_primitives::Block) -> Result<(), NetworkError> {
         self.command_tx
-            .send(NetworkCommand::BroadcastBlock(block))
+            .send(NetworkCommand::BroadcastBlock(Box::new(block)))
             .map_err(|_| NetworkError::ChannelClosed)
     }
 
@@ -277,7 +277,7 @@ impl NetworkService {
         tx: velochain_primitives::SignedTransaction,
     ) -> Result<(), NetworkError> {
         self.command_tx
-            .send(NetworkCommand::BroadcastTransaction(tx))
+            .send(NetworkCommand::BroadcastTransaction(Box::new(tx)))
             .map_err(|_| NetworkError::ChannelClosed)
     }
 
