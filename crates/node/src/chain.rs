@@ -378,6 +378,16 @@ impl Chain {
         self.chain_id
     }
 
+    /// Forcefully set the chain head to a specific block header.
+    /// Used during chain reorganizations.
+    pub fn set_head(&self, header: BlockHeader) -> Result<(), NodeError> {
+        let number = header.number;
+        self.db.put_latest_block_number(number)?;
+        *self.head.write() = Some(header);
+        tracing::info!("Chain head set to block {}", number);
+        Ok(())
+    }
+
     /// Store transaction receipts to the database.
     fn store_receipts(&self, receipts: &[TransactionReceipt]) -> Result<(), NodeError> {
         for receipt in receipts {

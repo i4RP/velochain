@@ -9,7 +9,7 @@ use velochain_consensus::poa::{PoaConfig, PoaConsensus};
 use velochain_game_engine::GameWorld;
 use velochain_network::service::{NetworkConfig, NetworkService};
 use velochain_network::{Multiaddr, NetworkEvent};
-use velochain_node::{BlockProducer, Chain, NodeMetrics, ShutdownController};
+use velochain_node::{BlockProducer, Chain, ConfigFile, NodeMetrics, ShutdownController};
 use velochain_primitives::{BlockHeader, Genesis, Keypair};
 use velochain_rpc::{server::RpcConfig, RpcServer, new_event_channel};
 use velochain_state::WorldState;
@@ -105,6 +105,36 @@ enum Commands {
         #[arg(long, default_value = "http://127.0.0.1:8545")]
         rpc: String,
     },
+    /// Export chain state to a snapshot file.
+    Snapshot {
+        /// Data directory.
+        #[arg(short, long, default_value = "./velochain-data")]
+        datadir: PathBuf,
+        /// Output snapshot file path.
+        #[arg(short, long, default_value = "./velochain-snapshot.bin")]
+        output: PathBuf,
+    },
+    /// Restore chain state from a snapshot file.
+    Restore {
+        /// Data directory.
+        #[arg(short, long, default_value = "./velochain-data")]
+        datadir: PathBuf,
+        /// Snapshot file to import.
+        #[arg(short, long)]
+        snapshot: PathBuf,
+    },
+    /// Show snapshot file metadata without importing.
+    SnapshotInfo {
+        /// Path to snapshot file.
+        #[arg(short, long)]
+        snapshot: PathBuf,
+    },
+    /// Generate a default configuration file.
+    ConfigInit {
+        /// Output config file path.
+        #[arg(short, long, default_value = "./velochain.toml")]
+        output: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -150,6 +180,18 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Peers { rpc } => {
             cmd_peers(rpc).await?;
+        }
+        Commands::Snapshot { datadir, output } => {
+            cmd_snapshot(datadir, output).await?;
+        }
+        Commands::Restore { datadir, snapshot } => {
+            cmd_restore(datadir, snapshot).await?;
+        }
+        Commands::SnapshotInfo { snapshot } => {
+            cmd_snapshot_info(snapshot)?;
+        }
+        Commands::ConfigInit { output } => {
+            cmd_config_init(output)?;
         }
     }
 
@@ -547,5 +589,89 @@ async fn cmd_peers(rpc: String) -> anyhow::Result<()> {
             println!("Make sure a VeloChain node is running with RPC enabled.");
         }
     }
+    Ok(())
+}
+
+async fn cmd_snapshot(datadir: PathBuf, output: PathBuf) -> anyhow::Result<()> {
+    let genesis_path = datadir.join("genesis.json");
+    if !genesis_path.exists() {
+        anyhow::bail!("Chain not initialized. Run 'velochain init' first.");
+    }
+    let genesis: Genesis = serde_json::from_str(&std::fs::read_to_string(&genesis_path)?)?;
+
+    let db = Arc::new(Database::open(&datadir.join("db"))?);
+    let game_world = match db.get_game_state(b"world") {
+        Ok(Some(data)) => {
+            match GameWorld::from_state(&data, genesis.config.world.seed) {
+                Ok(world) => Arc::new(world),
+                Err(_) => Arc::new(GameWorld::new(genesis.config.world.seed)),
+            }
+        }
+        _ => Arc::new(GameWorld::new(genesis.config.world.seed)),
+    };
+
+    let meta = velochain_node::export_snapshot(
+        &db,
+        &game_world,
+        genesis.config.chain_id,
+        &output,
+    )?;
+
+    println!("Snapshot exported successfully!");
+    println!("  Block number: {}", meta.block_number);
+    println!("  Block hash: {}", meta.block_hash);
+    println!("  Game tick: {}", meta.game_tick);
+    println!("  Blocks: {}", meta.block_count);
+    println!("  File: {:?}", output);
+
+    Ok(())
+}
+
+async fn cmd_restore(datadir: PathBuf, snapshot_path: PathBuf) -> anyhow::Result<()> {
+    let genesis_path = datadir.join("genesis.json");
+    if !genesis_path.exists() {
+        anyhow::bail!("Chain not initialized. Run 'velochain init' first.");
+    }
+    let genesis: Genesis = serde_json::from_str(&std::fs::read_to_string(&genesis_path)?)?;
+
+    let db = Arc::new(Database::open(&datadir.join("db"))?);
+    let state = Arc::new(WorldState::new(db.clone()));
+
+    let (meta, _game_world) = velochain_node::import_snapshot(
+        &db,
+        &state,
+        &snapshot_path,
+        genesis.config.world.seed,
+    )?;
+
+    println!("Snapshot restored successfully!");
+    println!("  Block number: {}", meta.block_number);
+    println!("  Block hash: {}", meta.block_hash);
+    println!("  Game tick: {}", meta.game_tick);
+    println!("  Blocks imported: {}", meta.block_count);
+
+    Ok(())
+}
+
+fn cmd_snapshot_info(snapshot_path: PathBuf) -> anyhow::Result<()> {
+    let meta = velochain_node::read_snapshot_meta(&snapshot_path)?;
+
+    println!("VeloChain Snapshot Info");
+    println!("=======================");
+    println!("  Version: {}", meta.version);
+    println!("  Chain ID: {}", meta.chain_id);
+    println!("  Block number: {}", meta.block_number);
+    println!("  Block hash: {}", meta.block_hash);
+    println!("  Game tick: {}", meta.game_tick);
+    println!("  Block count: {}", meta.block_count);
+    println!("  Created at: {} (unix)", meta.created_at);
+
+    Ok(())
+}
+
+fn cmd_config_init(output: PathBuf) -> anyhow::Result<()> {
+    ConfigFile::write_default(&output)?;
+    println!("Default configuration written to {:?}", output);
+    println!("Edit this file and use it with: velochain run --config {:?}", output);
     Ok(())
 }
