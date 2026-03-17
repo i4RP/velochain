@@ -1,6 +1,7 @@
 //! VeloChain node CLI entry point.
 
 use clap::{Parser, Subcommand};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::info;
@@ -415,19 +416,100 @@ async fn cmd_run(
         });
     }
 
-    // Spawn network event handler
+    // Spawn network event handler with block buffering for chain sync
     let chain_for_net = chain.clone();
+    let network_for_handler = network.clone();
     tokio::spawn(async move {
+        // Buffer for out-of-order blocks (block_number -> Block)
+        let mut block_buffer: BTreeMap<u64, velochain_primitives::Block> = BTreeMap::new();
+        // Track which blocks we've already requested to avoid duplicate requests
+        let mut requested_blocks: std::collections::HashSet<u64> = std::collections::HashSet::new();
+
         while let Some(event) = net_events.recv().await {
             match event {
-                NetworkEvent::BlockReceived(block) => {
-                    info!(
-                        "Received block from network: number={}, hash={}",
-                        block.number(),
-                        block.hash()
-                    );
-                    if let Err(e) = chain_for_net.apply_block(&block) {
-                        tracing::warn!("Failed to apply received block: {}", e);
+                NetworkEvent::BlockReceived(block) | NetworkEvent::BlockResponseReceived(block) => {
+                    let block_num = block.number();
+                    let expected = chain_for_net.block_number() + 1;
+
+                    if block_num < expected {
+                        // Already have this block, skip
+                        tracing::debug!("Skipping already-applied block {}", block_num);
+                        continue;
+                    }
+
+                    if block_num == expected {
+                        // This is the next expected block - apply it
+                        info!(
+                            "Received block from network: number={}, hash={}",
+                            block.number(),
+                            block.hash()
+                        );
+                        match chain_for_net.apply_block(&block) {
+                            Ok(()) => {
+                                requested_blocks.remove(&block_num);
+                                // Try to apply buffered blocks sequentially
+                                loop {
+                                    let next = chain_for_net.block_number() + 1;
+                                    if let Some(buffered) = block_buffer.remove(&next) {
+                                        info!("Applying buffered block {}", next);
+                                        match chain_for_net.apply_block(&buffered) {
+                                            Ok(()) => {
+                                                requested_blocks.remove(&next);
+                                            }
+                                            Err(e) => {
+                                                tracing::warn!("Failed to apply buffered block {}: {}", next, e);
+                                                break;
+                                            }
+                                        }
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to apply received block {}: {}", block_num, e);
+                            }
+                        }
+                    } else {
+                        // Out of order - buffer it and request missing blocks
+                        info!(
+                            "Buffering out-of-order block {} (expected {})",
+                            block_num, expected
+                        );
+                        block_buffer.insert(block_num, *block);
+
+                        // Request missing blocks from peers
+                        for missing in expected..block_num {
+                            if !requested_blocks.contains(&missing) && !block_buffer.contains_key(&missing) {
+                                tracing::debug!("Requesting missing block {} from peers", missing);
+                                if let Err(e) = network_for_handler.request_block(missing) {
+                                    tracing::warn!("Failed to request block {}: {}", missing, e);
+                                }
+                                requested_blocks.insert(missing);
+                            }
+                        }
+                    }
+
+                    // Limit buffer size to prevent memory issues
+                    while block_buffer.len() > 1000 {
+                        block_buffer.pop_first();
+                    }
+                }
+                NetworkEvent::BlockRequested(number) => {
+                    // A peer is requesting a block - respond if we have it
+                    match chain_for_net.get_block_by_number(number) {
+                        Ok(Some(block)) => {
+                            tracing::debug!("Responding to block request for block {}", number);
+                            if let Err(e) = network_for_handler.send_block_response(block) {
+                                tracing::warn!("Failed to send block response: {}", e);
+                            }
+                        }
+                        Ok(None) => {
+                            tracing::debug!("Block {} not found for peer request", number);
+                        }
+                        Err(e) => {
+                            tracing::warn!("Error looking up block {}: {}", number, e);
+                        }
                     }
                 }
                 NetworkEvent::TransactionReceived(tx) => {

@@ -7,7 +7,7 @@
 //! 4. Seals and broadcasts the block
 
 use std::sync::Arc;
-use tokio::time::{interval, Duration};
+use tokio::time::{interval, sleep, Duration};
 use tracing::{debug, error, info, warn};
 use velochain_consensus::ConsensusEngine;
 use velochain_network::NetworkService;
@@ -68,10 +68,27 @@ impl BlockProducer {
                         block.hash()
                     );
 
-                    // Broadcast block to network peers
+                    // Broadcast block to network peers with retry for early blocks
                     if let Some(ref network) = self.network {
-                        if let Err(e) = network.broadcast_block(block) {
-                            warn!("Failed to broadcast block: {}", e);
+                        let mut retries = 0;
+                        let max_retries = if block.number() <= 3 { 5 } else { 0 };
+                        loop {
+                            match network.broadcast_block(block.clone()) {
+                                Ok(()) => break,
+                                Err(e) => {
+                                    if retries < max_retries {
+                                        retries += 1;
+                                        debug!(
+                                            "Retrying block {} broadcast ({}/{}): {}",
+                                            block.number(), retries, max_retries, e
+                                        );
+                                        sleep(Duration::from_millis(500)).await;
+                                    } else {
+                                        warn!("Failed to broadcast block {}: {}", block.number(), e);
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
