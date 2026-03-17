@@ -31,7 +31,10 @@ impl ShutdownController {
 
     /// Trigger shutdown. All waiters will be notified.
     pub fn shutdown(&self) {
-        if !self.initiated.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        if !self
+            .initiated
+            .swap(true, std::sync::atomic::Ordering::SeqCst)
+        {
             info!("Shutdown signal sent to all subsystems");
             self.notify.notify_waiters();
             let _ = self.tx.send(());

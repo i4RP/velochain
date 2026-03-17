@@ -5,9 +5,9 @@
 
 pub mod error;
 pub mod poa;
-pub mod validator_manager;
 #[cfg(test)]
 mod tests;
+pub mod validator_manager;
 
 pub use error::ConsensusError;
 pub use poa::PoaConsensus;

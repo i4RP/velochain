@@ -311,8 +311,10 @@ impl TradeManager {
             .trades
             .iter()
             .filter(|(_, t)| {
-                !matches!(t.state, TradeState::Completed | TradeState::Cancelled | TradeState::Expired)
-                    && current_tick > t.created_tick + t.timeout_ticks
+                !matches!(
+                    t.state,
+                    TradeState::Completed | TradeState::Cancelled | TradeState::Expired
+                ) && current_tick > t.created_tick + t.timeout_ticks
             })
             .map(|(id, _)| *id)
             .collect();
@@ -378,7 +380,7 @@ mod tests {
         mgr.accept_trade(1, "bob");
 
         mgr.add_item(1, "alice", 1, 1); // Alice offers 1 Wooden Sword
-        mgr.add_item(1, "bob", 30, 5);  // Bob offers 5 Iron Ore
+        mgr.add_item(1, "bob", 30, 5); // Bob offers 5 Iron Ore
 
         let r1 = mgr.confirm_trade(1, "alice");
         assert!(matches!(r1, TradeResult::Confirmed));
@@ -401,7 +403,10 @@ mod tests {
         let mut mgr = TradeManager::new();
         mgr.propose_trade("alice", "bob", 1);
         let result = mgr.propose_trade("alice", "charlie", 1);
-        assert!(matches!(result, TradeResult::Error(TradeError::AlreadyTrading)));
+        assert!(matches!(
+            result,
+            TradeResult::Error(TradeError::AlreadyTrading)
+        ));
     }
 
     #[test]
@@ -420,7 +425,10 @@ mod tests {
         let mut mgr = TradeManager::new();
         mgr.propose_trade("alice", "bob", 1);
         let result = mgr.accept_trade(1, "charlie");
-        assert!(matches!(result, TradeResult::Error(TradeError::NotParticipant)));
+        assert!(matches!(
+            result,
+            TradeResult::Error(TradeError::NotParticipant)
+        ));
     }
 
     #[test]

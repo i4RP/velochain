@@ -3,10 +3,10 @@
 //! Provides health bar, inventory panel, minimap, chat, and
 //! debug overlay using Bevy's built-in UI system.
 
-use bevy::prelude::*;
 use crate::camera::LocalPlayer;
-use crate::renderer::GameEntity;
 use crate::network::NetworkState;
+use crate::renderer::GameEntity;
+use bevy::prelude::*;
 
 /// Plugin for all UI elements.
 pub struct UiPlugin;
@@ -16,12 +16,15 @@ impl Plugin for UiPlugin {
         app.insert_resource(ChatLog::default())
             .insert_resource(InventoryUiState::default())
             .add_systems(Startup, setup_ui)
-            .add_systems(Update, (
-                update_health_bar,
-                update_debug_overlay,
-                update_chat_display,
-                toggle_inventory,
-            ));
+            .add_systems(
+                Update,
+                (
+                    update_health_bar,
+                    update_debug_overlay,
+                    update_chat_display,
+                    toggle_inventory,
+                ),
+            );
     }
 }
 

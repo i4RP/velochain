@@ -50,11 +50,7 @@ pub struct LocalPlayer;
 fn setup_camera(mut commands: Commands) {
     commands.insert_resource(CameraConfig::default());
 
-    commands.spawn((
-        Camera2d,
-        MainCamera,
-        Transform::from_xyz(0.0, 0.0, 999.0),
-    ));
+    commands.spawn((Camera2d, MainCamera, Transform::from_xyz(0.0, 0.0, 999.0)));
 }
 
 fn camera_follow_player(
@@ -81,10 +77,7 @@ fn camera_follow_player(
     projection.scale = config.zoom;
 }
 
-fn camera_zoom(
-    mut config: ResMut<CameraConfig>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-) {
+fn camera_zoom(mut config: ResMut<CameraConfig>, keyboard: Res<ButtonInput<KeyCode>>) {
     let zoom_speed = 0.05;
 
     if keyboard.pressed(KeyCode::Equal) || keyboard.pressed(KeyCode::NumpadAdd) {

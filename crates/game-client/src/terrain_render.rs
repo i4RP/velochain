@@ -84,8 +84,10 @@ fn update_visible_chunks(
     };
 
     // Calculate which chunk the camera is in
-    let cam_chunk_x = (cam_transform.translation.x / (CHUNK_SIZE as f32 * TILE_PIXEL_SIZE)).floor() as i32;
-    let cam_chunk_y = (cam_transform.translation.y / (CHUNK_SIZE as f32 * TILE_PIXEL_SIZE)).floor() as i32;
+    let cam_chunk_x =
+        (cam_transform.translation.x / (CHUNK_SIZE as f32 * TILE_PIXEL_SIZE)).floor() as i32;
+    let cam_chunk_y =
+        (cam_transform.translation.y / (CHUNK_SIZE as f32 * TILE_PIXEL_SIZE)).floor() as i32;
 
     // Only update if camera moved to a new chunk
     if (cam_chunk_x, cam_chunk_y) == state.last_camera_chunk {
@@ -128,12 +130,7 @@ fn update_visible_chunks(
     state.loaded_chunks = desired_chunks;
 }
 
-fn spawn_chunk(
-    commands: &mut Commands,
-    generator: &TerrainGenerator,
-    chunk_x: i32,
-    chunk_y: i32,
-) {
+fn spawn_chunk(commands: &mut Commands, generator: &TerrainGenerator, chunk_x: i32, chunk_y: i32) {
     let chunk = generator.generate_chunk(chunk_x, chunk_y);
 
     for ty in 0..CHUNK_SIZE {

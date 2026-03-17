@@ -7,9 +7,7 @@ use crate::error::EvmError;
 use alloy_primitives::{Address, B256, U256};
 use revm::{
     db::{CacheDB, EmptyDB},
-    primitives::{
-        AccountInfo, Bytecode, ExecutionResult, Output, TransactTo,
-    },
+    primitives::{AccountInfo, Bytecode, ExecutionResult, Output, TransactTo},
     Evm,
 };
 use tracing::debug;
@@ -154,18 +152,17 @@ impl EvmExecutor {
                     contract_address,
                 })
             }
-            ExecutionResult::Revert { gas_used, output } => {
-                Ok(ExecutionOutcome {
-                    success: false,
-                    gas_used,
-                    output: output.to_vec(),
-                    logs: vec![],
-                    contract_address: None,
-                })
-            }
-            ExecutionResult::Halt { reason, gas_used } => {
-                Err(EvmError::Halt(format!("{:?}, gas_used={}", reason, gas_used)))
-            }
+            ExecutionResult::Revert { gas_used, output } => Ok(ExecutionOutcome {
+                success: false,
+                gas_used,
+                output: output.to_vec(),
+                logs: vec![],
+                contract_address: None,
+            }),
+            ExecutionResult::Halt { reason, gas_used } => Err(EvmError::Halt(format!(
+                "{:?}, gas_used={}",
+                reason, gas_used
+            ))),
         }
     }
 
@@ -298,18 +295,17 @@ impl EvmExecutor {
                     contract_address,
                 })
             }
-            ExecutionResult::Revert { gas_used, output } => {
-                Ok(ExecutionOutcome {
-                    success: false,
-                    gas_used,
-                    output: output.to_vec(),
-                    logs: vec![],
-                    contract_address: None,
-                })
-            }
-            ExecutionResult::Halt { reason, gas_used } => {
-                Err(EvmError::Halt(format!("{:?}, gas_used={}", reason, gas_used)))
-            }
+            ExecutionResult::Revert { gas_used, output } => Ok(ExecutionOutcome {
+                success: false,
+                gas_used,
+                output: output.to_vec(),
+                logs: vec![],
+                contract_address: None,
+            }),
+            ExecutionResult::Halt { reason, gas_used } => Err(EvmError::Halt(format!(
+                "{:?}, gas_used={}",
+                reason, gas_used
+            ))),
         }
     }
 

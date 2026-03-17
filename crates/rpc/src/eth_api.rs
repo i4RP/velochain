@@ -56,18 +56,11 @@ pub trait EthApi {
 
     /// Returns block information by hash.
     #[method(name = "getBlockByHash")]
-    async fn get_block_by_hash(
-        &self,
-        hash: String,
-        full_txs: bool,
-    ) -> RpcResult<Option<RpcBlock>>;
+    async fn get_block_by_hash(&self, hash: String, full_txs: bool) -> RpcResult<Option<RpcBlock>>;
 
     /// Returns a transaction receipt by transaction hash.
     #[method(name = "getTransactionReceipt")]
-    async fn get_transaction_receipt(
-        &self,
-        hash: String,
-    ) -> RpcResult<Option<RpcReceipt>>;
+    async fn get_transaction_receipt(&self, hash: String) -> RpcResult<Option<RpcReceipt>>;
 
     /// Executes a call without creating a transaction (read-only).
     #[method(name = "call")]
@@ -261,23 +254,20 @@ impl EthApiServer for EthApiImpl {
     async fn send_raw_transaction(&self, data: String) -> RpcResult<String> {
         // Decode the JSON-encoded signed transaction
         let hex_data = data.strip_prefix("0x").unwrap_or(&data);
-        let tx_bytes = hex::decode(hex_data).map_err(|e| {
-            invalid_params(format!("Invalid hex data: {e}"))
-        })?;
-        let signed_tx: velochain_primitives::SignedTransaction =
-            serde_json::from_slice(&tx_bytes).map_err(|e| {
-                invalid_params(format!("Invalid transaction encoding: {e}"))
-            })?;
+        let tx_bytes =
+            hex::decode(hex_data).map_err(|e| invalid_params(format!("Invalid hex data: {e}")))?;
+        let signed_tx: velochain_primitives::SignedTransaction = serde_json::from_slice(&tx_bytes)
+            .map_err(|e| invalid_params(format!("Invalid transaction encoding: {e}")))?;
 
         // Verify signature by recovering sender
-        signed_tx.sender().map_err(|e| {
-            invalid_params(format!("Invalid signature: {e}"))
-        })?;
+        signed_tx
+            .sender()
+            .map_err(|e| invalid_params(format!("Invalid signature: {e}")))?;
 
         let hash = signed_tx.hash;
-        self.txpool.add_transaction(signed_tx).map_err(|e| {
-            internal_err(format!("TxPool error: {e}"))
-        })?;
+        self.txpool
+            .add_transaction(signed_tx)
+            .map_err(|e| internal_err(format!("TxPool error: {e}")))?;
 
         Ok(format!("{:?}", hash))
     }
@@ -302,24 +292,35 @@ impl EthApiServer for EthApiImpl {
                 .unwrap_or(0)
         } else {
             let s = number.strip_prefix("0x").unwrap_or(&number);
-            u64::from_str_radix(s, 16).map_err(|e| invalid_params(format!("Invalid block number: {e}")))?
+            u64::from_str_radix(s, 16)
+                .map_err(|e| invalid_params(format!("Invalid block number: {e}")))?
         };
 
-        let hash = match self.db.get_block_hash_by_number(block_num)
-            .map_err(|e| internal_err(format!("Storage error: {e}")))? {
-            Some(h) => h,
-            None => return Ok(None),
-        };
-
-        let header = match self.db.get_header(&hash)
-            .map_err(|e| internal_err(format!("Storage error: {e}")))? {
-            Some(h) => h,
-            None => return Ok(None),
-        };
-
-        let body = self.db.get_body(&hash)
+        let hash = match self
+            .db
+            .get_block_hash_by_number(block_num)
             .map_err(|e| internal_err(format!("Storage error: {e}")))?
-            .unwrap_or_else(|| velochain_primitives::BlockBody { transactions: vec![] });
+        {
+            Some(h) => h,
+            None => return Ok(None),
+        };
+
+        let header = match self
+            .db
+            .get_header(&hash)
+            .map_err(|e| internal_err(format!("Storage error: {e}")))?
+        {
+            Some(h) => h,
+            None => return Ok(None),
+        };
+
+        let body = self
+            .db
+            .get_body(&hash)
+            .map_err(|e| internal_err(format!("Storage error: {e}")))?
+            .unwrap_or_else(|| velochain_primitives::BlockBody {
+                transactions: vec![],
+            });
 
         Ok(Some(RpcBlock::from_block(&header, &body)))
     }
@@ -330,54 +331,76 @@ impl EthApiServer for EthApiImpl {
         _full_txs: bool,
     ) -> RpcResult<Option<RpcBlock>> {
         let hash_hex = hash.strip_prefix("0x").unwrap_or(&hash);
-        let hash_bytes = hex::decode(hash_hex)
-            .map_err(|e| invalid_params(format!("Invalid hash: {e}")))?;
+        let hash_bytes =
+            hex::decode(hash_hex).map_err(|e| invalid_params(format!("Invalid hash: {e}")))?;
         if hash_bytes.len() != 32 {
             return Err(invalid_params("Hash must be 32 bytes".to_string()));
         }
         let mut hash_arr = [0u8; 32];
         hash_arr.copy_from_slice(&hash_bytes);
 
-        let header = match self.db.get_header(&hash_arr)
-            .map_err(|e| internal_err(format!("Storage error: {e}")))? {
+        let header = match self
+            .db
+            .get_header(&hash_arr)
+            .map_err(|e| internal_err(format!("Storage error: {e}")))?
+        {
             Some(h) => h,
             None => return Ok(None),
         };
 
-        let body = self.db.get_body(&hash_arr)
+        let body = self
+            .db
+            .get_body(&hash_arr)
             .map_err(|e| internal_err(format!("Storage error: {e}")))?
-            .unwrap_or_else(|| velochain_primitives::BlockBody { transactions: vec![] });
+            .unwrap_or_else(|| velochain_primitives::BlockBody {
+                transactions: vec![],
+            });
 
         Ok(Some(RpcBlock::from_block(&header, &body)))
     }
 
-    async fn get_transaction_receipt(
-        &self,
-        hash: String,
-    ) -> RpcResult<Option<RpcReceipt>> {
+    async fn get_transaction_receipt(&self, hash: String) -> RpcResult<Option<RpcReceipt>> {
         let hash_hex = hash.strip_prefix("0x").unwrap_or(&hash);
-        let hash_bytes = hex::decode(hash_hex)
-            .map_err(|e| invalid_params(format!("Invalid hash: {e}")))?;
+        let hash_bytes =
+            hex::decode(hash_hex).map_err(|e| invalid_params(format!("Invalid hash: {e}")))?;
         if hash_bytes.len() != 32 {
             return Err(invalid_params("Hash must be 32 bytes".to_string()));
         }
         let mut hash_arr = [0u8; 32];
         hash_arr.copy_from_slice(&hash_bytes);
 
-        match self.db.get_receipt(&hash_arr)
-            .map_err(|e| internal_err(format!("Storage error: {e}")))? {
+        match self
+            .db
+            .get_receipt(&hash_arr)
+            .map_err(|e| internal_err(format!("Storage error: {e}")))?
+        {
             Some(data) => {
                 // Parse the stored receipt (node's TransactionReceipt format)
                 let stored: serde_json::Value = serde_json::from_slice(&data)
                     .map_err(|e| internal_err(format!("Receipt decode: {e}")))?;
                 let receipt = RpcReceipt {
-                    transaction_hash: format!("0x{}", stored["tx_hash"].as_str().unwrap_or("").trim_start_matches("0x")),
+                    transaction_hash: format!(
+                        "0x{}",
+                        stored["tx_hash"]
+                            .as_str()
+                            .unwrap_or("")
+                            .trim_start_matches("0x")
+                    ),
                     block_number: format!("0x{:x}", stored["block_number"].as_u64().unwrap_or(0)),
-                    block_hash: format!("0x{}", stored["block_hash"].as_str().unwrap_or("").trim_start_matches("0x")),
+                    block_hash: format!(
+                        "0x{}",
+                        stored["block_hash"]
+                            .as_str()
+                            .unwrap_or("")
+                            .trim_start_matches("0x")
+                    ),
                     transaction_index: format!("0x{:x}", stored["index"].as_u64().unwrap_or(0)),
                     success: stored["success"].as_bool().unwrap_or(false),
                     gas_used: format!("0x{:x}", stored["gas_used"].as_u64().unwrap_or(0)),
-                    cumulative_gas_used: format!("0x{:x}", stored["cumulative_gas_used"].as_u64().unwrap_or(0)),
+                    cumulative_gas_used: format!(
+                        "0x{:x}",
+                        stored["cumulative_gas_used"].as_u64().unwrap_or(0)
+                    ),
                     contract_address: stored["contract_address"].as_str().map(|s| s.to_string()),
                     logs: stored["logs"].as_array().cloned().unwrap_or_default(),
                 };
@@ -401,7 +424,8 @@ impl EthApiServer for EthApiImpl {
         let gas_limit = parse_u64_hex(tx.gas.as_deref().unwrap_or("0x1c9c380"))?; // 30M default
 
         let evm = self.evm.lock();
-        let result = evm.simulate_call(from, to, value, data, gas_limit)
+        let result = evm
+            .simulate_call(from, to, value, data, gas_limit)
             .map_err(|e| internal_err(format!("EVM call failed: {e}")))?;
 
         Ok(format!("0x{}", hex::encode(&result.output)))
@@ -420,7 +444,8 @@ impl EthApiServer for EthApiImpl {
         let data = parse_hex_data(tx.data.as_deref().unwrap_or("0x"))?;
 
         let evm = self.evm.lock();
-        let gas = evm.estimate_gas(from, to, value, data)
+        let gas = evm
+            .estimate_gas(from, to, value, data)
             .map_err(|e| internal_err(format!("Gas estimation failed: {e}")))?;
 
         Ok(format!("0x{:x}", gas))
@@ -435,32 +460,46 @@ impl EthApiServer for EthApiImpl {
 
     async fn get_logs(&self, filter: LogFilter) -> RpcResult<Vec<RpcLog>> {
         let from_block = parse_u64_hex(filter.from_block.as_deref().unwrap_or("0x0"))?;
-        let latest = self.db
+        let latest = self
+            .db
             .get_latest_block_number()
             .map_err(|e| internal_err(format!("Storage error: {e}")))?
             .unwrap_or(0);
-        let to_block = parse_u64_hex(filter.to_block.as_deref().unwrap_or("latest"))
-            .unwrap_or(latest);
+        let to_block =
+            parse_u64_hex(filter.to_block.as_deref().unwrap_or("latest")).unwrap_or(latest);
 
-        let filter_addr = filter.address.as_ref().map(|a| parse_address(a)).transpose()?;
+        let filter_addr = filter
+            .address
+            .as_ref()
+            .map(|a| parse_address(a))
+            .transpose()?;
 
         let mut logs = Vec::new();
         for block_num in from_block..=to_block.min(from_block + 1000) {
-            let block_hash = match self.db.get_block_hash_by_number(block_num)
-                .map_err(|e| internal_err(format!("Storage error: {e}")))? {
+            let block_hash = match self
+                .db
+                .get_block_hash_by_number(block_num)
+                .map_err(|e| internal_err(format!("Storage error: {e}")))?
+            {
                 Some(h) => h,
                 None => continue,
             };
 
-            let body = match self.db.get_body(&block_hash)
-                .map_err(|e| internal_err(format!("Storage error: {e}")))? {
+            let body = match self
+                .db
+                .get_body(&block_hash)
+                .map_err(|e| internal_err(format!("Storage error: {e}")))?
+            {
                 Some(b) => b,
                 None => continue,
             };
 
             for (tx_idx, tx) in body.transactions.iter().enumerate() {
-                if let Some(receipt_data) = self.db.get_receipt(tx.hash.as_ref())
-                    .map_err(|e| internal_err(format!("Storage error: {e}")))? {
+                if let Some(receipt_data) = self
+                    .db
+                    .get_receipt(tx.hash.as_ref())
+                    .map_err(|e| internal_err(format!("Storage error: {e}")))?
+                {
                     if let Ok(stored) = serde_json::from_slice::<serde_json::Value>(&receipt_data) {
                         if let Some(stored_logs) = stored["logs"].as_array() {
                             for (log_idx, log) in stored_logs.iter().enumerate() {
@@ -472,7 +511,11 @@ impl EthApiServer for EthApiImpl {
                                 }
                                 let topics: Vec<String> = log["topics"]
                                     .as_array()
-                                    .map(|t| t.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                                    .map(|t| {
+                                        t.iter()
+                                            .filter_map(|v| v.as_str().map(String::from))
+                                            .collect()
+                                    })
                                     .unwrap_or_default();
                                 logs.push(RpcLog {
                                     address: log_addr.to_string(),
@@ -520,8 +563,7 @@ fn parse_u256_hex(s: &str) -> RpcResult<U256> {
     if s.is_empty() || s == "0" {
         return Ok(U256::ZERO);
     }
-    U256::from_str_radix(s, 16)
-        .map_err(|e| invalid_params(format!("Invalid U256 hex: {e}")))
+    U256::from_str_radix(s, 16).map_err(|e| invalid_params(format!("Invalid U256 hex: {e}")))
 }
 
 fn parse_hex_data(s: &str) -> RpcResult<Vec<u8>> {
@@ -537,6 +579,5 @@ fn parse_u64_hex(s: &str) -> RpcResult<u64> {
     if s.is_empty() || s == "0" {
         return Ok(0);
     }
-    u64::from_str_radix(s, 16)
-        .map_err(|e| invalid_params(format!("Invalid u64 hex: {e}")))
+    u64::from_str_radix(s, 16).map_err(|e| invalid_params(format!("Invalid u64 hex: {e}")))
 }

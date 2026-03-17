@@ -319,10 +319,7 @@ impl SkillRegistry {
 
     /// Get skills in a specific tree.
     pub fn skills_in_tree(&self, tree: SkillTree) -> Vec<&SkillDef> {
-        self.skills
-            .values()
-            .filter(|s| s.tree == tree)
-            .collect()
+        self.skills.values().filter(|s| s.tree == tree).collect()
     }
 
     /// Skill count.
@@ -388,7 +385,10 @@ impl SkillRegistry {
         *state.skills.entry(skill_id).or_insert(0) += 1;
         let new_level = state.skill_level(skill_id);
 
-        SkillResult::LeveledUp { skill_id, new_level }
+        SkillResult::LeveledUp {
+            skill_id,
+            new_level,
+        }
     }
 
     /// Compute total bonuses from all allocated skills.
@@ -444,7 +444,13 @@ mod tests {
         state.available_points = 5;
 
         let result = registry.allocate_point(1, 1, &mut state); // Strength
-        assert!(matches!(result, SkillResult::LeveledUp { skill_id: 1, new_level: 1 }));
+        assert!(matches!(
+            result,
+            SkillResult::LeveledUp {
+                skill_id: 1,
+                new_level: 1
+            }
+        ));
         assert_eq!(state.available_points, 4);
         assert_eq!(state.skill_level(1), 1);
     }
@@ -456,7 +462,10 @@ mod tests {
         state.available_points = 0;
 
         let result = registry.allocate_point(1, 1, &mut state);
-        assert!(matches!(result, SkillResult::Error(SkillError::NotEnoughPoints { .. })));
+        assert!(matches!(
+            result,
+            SkillResult::Error(SkillError::NotEnoughPoints { .. })
+        ));
     }
 
     #[test]
@@ -467,7 +476,10 @@ mod tests {
         state.skills.insert(1, 10); // Strength at max (10)
 
         let result = registry.allocate_point(1, 1, &mut state);
-        assert!(matches!(result, SkillResult::Error(SkillError::MaxLevel(1))));
+        assert!(matches!(
+            result,
+            SkillResult::Error(SkillError::MaxLevel(1))
+        ));
     }
 
     #[test]
@@ -478,7 +490,10 @@ mod tests {
 
         // Precision requires Strength level 3
         let result = registry.allocate_point(3, 5, &mut state);
-        assert!(matches!(result, SkillResult::Error(SkillError::PrerequisitesNotMet(_))));
+        assert!(matches!(
+            result,
+            SkillResult::Error(SkillError::PrerequisitesNotMet(_))
+        ));
 
         // Level up Strength to 3
         state.skills.insert(1, 3);
@@ -495,7 +510,10 @@ mod tests {
         // Precision requires player level 3
         state.skills.insert(1, 3);
         let result = registry.allocate_point(3, 1, &mut state);
-        assert!(matches!(result, SkillResult::Error(SkillError::LevelTooLow { .. })));
+        assert!(matches!(
+            result,
+            SkillResult::Error(SkillError::LevelTooLow { .. })
+        ));
     }
 
     #[test]
@@ -514,7 +532,7 @@ mod tests {
     fn test_compute_bonuses() {
         let registry = SkillRegistry::default();
         let mut state = PlayerSkillState::new();
-        state.skills.insert(1, 5);  // Strength level 5: +15 attack
+        state.skills.insert(1, 5); // Strength level 5: +15 attack
         state.skills.insert(30, 3); // Vitality level 3: +30 health
 
         let bonuses = registry.compute_bonuses(&state);

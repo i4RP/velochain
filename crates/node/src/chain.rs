@@ -114,7 +114,11 @@ impl Chain {
         if let Some(number) = self.db.get_latest_block_number()? {
             if let Some(hash) = self.db.get_block_hash_by_number(number)? {
                 if let Some(header) = self.db.get_header(&hash)? {
-                    info!("Restored chain head: block={}, hash=0x{}", number, hex::encode(hash));
+                    info!(
+                        "Restored chain head: block={}, hash=0x{}",
+                        number,
+                        hex::encode(hash)
+                    );
                     *self.head.write() = Some(header);
                     return Ok(());
                 }
@@ -130,11 +134,7 @@ impl Chain {
 
     /// Get the current block number.
     pub fn block_number(&self) -> u64 {
-        self.head
-            .read()
-            .as_ref()
-            .map(|h| h.number)
-            .unwrap_or(0)
+        self.head.read().as_ref().map(|h| h.number).unwrap_or(0)
     }
 
     /// Process and apply a new block.
@@ -152,7 +152,9 @@ impl Chain {
         for tx in &block.body.transactions {
             if tx.is_game_action() {
                 if let Some(action) = tx.game_action() {
-                    let sender = tx.sender().map_err(|e| NodeError::Internal(format!("Failed to recover sender: {e}")))?;
+                    let sender = tx.sender().map_err(|e| {
+                        NodeError::Internal(format!("Failed to recover sender: {e}"))
+                    })?;
                     game_actions.push((format!("{:?}", sender), action.clone()));
                     // Game actions use a fixed gas amount
                     total_gas_used += 21_000;
@@ -179,10 +181,14 @@ impl Chain {
             }
 
             for tx in &evm_txs {
-                let sender = tx.sender().map_err(|e| NodeError::Internal(format!("Sender recovery: {e}")))?;
+                let sender = tx
+                    .sender()
+                    .map_err(|e| NodeError::Internal(format!("Sender recovery: {e}")))?;
 
                 // Nonce verification: sender nonce must match tx nonce
-                let expected_nonce = self.state.get_nonce(&sender)
+                let expected_nonce = self
+                    .state
+                    .get_nonce(&sender)
                     .map_err(|e| NodeError::Internal(format!("Nonce read: {e}")))?;
                 if tx.transaction.nonce != expected_nonce {
                     warn!(
@@ -209,7 +215,8 @@ impl Chain {
 
                         // Deduct gas cost from sender balance
                         let gas_price = tx.transaction.gas_price.unwrap_or(1);
-                        let gas_cost = alloy_primitives::U256::from(outcome.gas_used) * alloy_primitives::U256::from(gas_price);
+                        let gas_cost = alloy_primitives::U256::from(outcome.gas_used)
+                            * alloy_primitives::U256::from(gas_price);
                         if let Err(e) = self.state.sub_balance(&sender, gas_cost) {
                             debug!("Gas deduction failed for {}: {}", sender, e);
                         }
@@ -232,11 +239,15 @@ impl Chain {
                             gas_used: outcome.gas_used,
                             cumulative_gas_used: total_gas_used,
                             contract_address: outcome.contract_address,
-                            logs: outcome.logs.iter().map(|l| ReceiptLog {
-                                address: l.address,
-                                topics: l.topics.clone(),
-                                data: l.data.clone(),
-                            }).collect(),
+                            logs: outcome
+                                .logs
+                                .iter()
+                                .map(|l| ReceiptLog {
+                                    address: l.address,
+                                    topics: l.topics.clone(),
+                                    data: l.data.clone(),
+                                })
+                                .collect(),
                         });
                     }
                     Err(e) => {
@@ -270,10 +281,14 @@ impl Chain {
         let mut game_cumulative_gas: u64 = total_gas_used;
         for tx in &block.body.transactions {
             if tx.is_game_action() {
-                let sender = tx.sender().map_err(|e| NodeError::Internal(format!("Sender recovery: {e}")))?;
+                let sender = tx
+                    .sender()
+                    .map_err(|e| NodeError::Internal(format!("Sender recovery: {e}")))?;
 
                 // Nonce verification for game actions
-                let expected_nonce = self.state.get_nonce(&sender)
+                let expected_nonce = self
+                    .state
+                    .get_nonce(&sender)
                     .map_err(|e| NodeError::Internal(format!("Nonce read: {e}")))?;
                 let nonce_ok = tx.transaction.nonce == expected_nonce;
 
@@ -329,12 +344,7 @@ impl Chain {
         self.store_receipts(&receipts)?;
 
         // 7. Remove included transactions from pool
-        let tx_hashes: Vec<_> = block
-            .body
-            .transactions
-            .iter()
-            .map(|tx| tx.hash)
-            .collect();
+        let tx_hashes: Vec<_> = block.body.transactions.iter().map(|tx| tx.hash).collect();
         self.txpool.remove_included(&tx_hashes);
 
         // 8. Update chain head

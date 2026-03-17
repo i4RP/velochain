@@ -147,12 +147,23 @@ pub struct AiStateComponent {
 /// AI state machine values.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum NpcAiState {
-    Idle { ticks_remaining: u32 },
-    Patrolling { waypoint_index: usize },
-    Chasing { target_id: EntityId },
-    Fleeing { threat_id: EntityId, ticks_remaining: u32 },
+    Idle {
+        ticks_remaining: u32,
+    },
+    Patrolling {
+        waypoint_index: usize,
+    },
+    Chasing {
+        target_id: EntityId,
+    },
+    Fleeing {
+        threat_id: EntityId,
+        ticks_remaining: u32,
+    },
     Returning,
-    Dead { respawn_ticks: u32 },
+    Dead {
+        respawn_ticks: u32,
+    },
 }
 
 /// Equipment component tracking equipped items.
@@ -208,11 +219,12 @@ impl EcsWorld {
     }
 
     /// Get a specific component type from an entity.
-    pub fn get_component(&self, entity: EntityId, matcher: fn(&Component) -> bool) -> Option<&Component> {
-        self.entities
-            .get(&entity)?
-            .iter()
-            .find(|c| matcher(c))
+    pub fn get_component(
+        &self,
+        entity: EntityId,
+        matcher: fn(&Component) -> bool,
+    ) -> Option<&Component> {
+        self.entities.get(&entity)?.iter().find(|c| matcher(c))
     }
 
     /// Get the position of an entity.

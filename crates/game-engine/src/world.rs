@@ -68,7 +68,9 @@ impl GameWorld {
                         behavior: match archetype.behavior_pattern {
                             crate::npc_ai::BehaviorPattern::Passive => NpcBehavior::Idle,
                             crate::npc_ai::BehaviorPattern::PatrolPassive
-                            | crate::npc_ai::BehaviorPattern::PatrolAggressive => NpcBehavior::Patrol,
+                            | crate::npc_ai::BehaviorPattern::PatrolAggressive => {
+                                NpcBehavior::Patrol
+                            }
                             crate::npc_ai::BehaviorPattern::Guardian => NpcBehavior::Aggressive,
                             crate::npc_ai::BehaviorPattern::Timid => NpcBehavior::Idle,
                             crate::npc_ai::BehaviorPattern::Predator => NpcBehavior::Aggressive,
@@ -96,7 +98,9 @@ impl GameWorld {
                         crit_multiplier: 1.5,
                     }),
                     Component::AiState(AiStateComponent {
-                        state: NpcAiState::Idle { ticks_remaining: 10 },
+                        state: NpcAiState::Idle {
+                            ticks_remaining: 10,
+                        },
                         waypoints,
                         leash_range: archetype.leash_range,
                         aggro_range: archetype.aggro_range,
@@ -134,8 +138,7 @@ impl GameWorld {
 
     /// Load a game world from serialized state.
     pub fn from_state(data: &[u8], seed: u64) -> Result<Self, GameEngineError> {
-        let ecs = EcsWorld::deserialize(data)
-            .map_err(GameEngineError::Serialization)?;
+        let ecs = EcsWorld::deserialize(data).map_err(GameEngineError::Serialization)?;
         let mut terrain = WorldTerrain::new(seed);
         terrain.generate_spawn_area();
         let mut spawn_manager = SpawnManager::new();
@@ -199,7 +202,9 @@ impl GameWorld {
                             behavior: match archetype.behavior_pattern {
                                 crate::npc_ai::BehaviorPattern::Passive => NpcBehavior::Idle,
                                 crate::npc_ai::BehaviorPattern::PatrolPassive
-                                | crate::npc_ai::BehaviorPattern::PatrolAggressive => NpcBehavior::Patrol,
+                                | crate::npc_ai::BehaviorPattern::PatrolAggressive => {
+                                    NpcBehavior::Patrol
+                                }
                                 crate::npc_ai::BehaviorPattern::Guardian => NpcBehavior::Aggressive,
                                 crate::npc_ai::BehaviorPattern::Timid => NpcBehavior::Idle,
                                 crate::npc_ai::BehaviorPattern::Predator => NpcBehavior::Aggressive,
@@ -227,7 +232,9 @@ impl GameWorld {
                             crit_multiplier: 1.5,
                         }),
                         Component::AiState(AiStateComponent {
-                            state: NpcAiState::Idle { ticks_remaining: 10 },
+                            state: NpcAiState::Idle {
+                                ticks_remaining: 10,
+                            },
                             waypoints,
                             leash_range: archetype.leash_range,
                             aggro_range: archetype.aggro_range,

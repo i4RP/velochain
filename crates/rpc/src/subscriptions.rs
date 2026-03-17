@@ -33,9 +33,7 @@ pub enum GameEvent {
         state_root: String,
     },
     /// A new pending transaction was received.
-    PendingTransaction {
-        hash: String,
-    },
+    PendingTransaction { hash: String },
     /// Player state changed (position, health, etc.).
     PlayerState {
         address: String,
@@ -230,7 +228,10 @@ impl SubscriptionApiServer for SubscriptionApiImpl {
         Ok(())
     }
 
-    async fn subscribe_chat_messages(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+    async fn subscribe_chat_messages(
+        &self,
+        pending: PendingSubscriptionSink,
+    ) -> SubscriptionResult {
         let mut rx = self.event_tx.subscribe();
         let sink = pending.accept().await?;
 
@@ -257,7 +258,10 @@ impl SubscriptionApiServer for SubscriptionApiImpl {
         Ok(())
     }
 
-    async fn subscribe_entity_updates(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+    async fn subscribe_entity_updates(
+        &self,
+        pending: PendingSubscriptionSink,
+    ) -> SubscriptionResult {
         let mut rx = self.event_tx.subscribe();
         let sink = pending.accept().await?;
 
@@ -304,7 +308,11 @@ impl EthSubscriptionApiImpl {
 
 #[jsonrpsee::core::async_trait]
 impl EthSubscriptionApiServer for EthSubscriptionApiImpl {
-    async fn subscribe(&self, pending: PendingSubscriptionSink, kind: String) -> SubscriptionResult {
+    async fn subscribe(
+        &self,
+        pending: PendingSubscriptionSink,
+        kind: String,
+    ) -> SubscriptionResult {
         let mut rx = self.event_tx.subscribe();
         let sink = pending.accept().await?;
 

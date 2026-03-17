@@ -141,7 +141,7 @@ impl EventManager {
             next_drop_id: 1,
             is_day: true,
             weather: WeatherType::Clear,
-            day_cycle_ticks: 6000, // ~20 minutes at 5 ticks/sec
+            day_cycle_ticks: 6000,        // ~20 minutes at 5 ticks/sec
             weather_interval_ticks: 3000, // ~10 minutes
         }
     }
@@ -162,13 +162,7 @@ impl EventManager {
     }
 
     /// Drop an item on the ground.
-    pub fn drop_item(
-        &mut self,
-        item_id: u32,
-        quantity: u32,
-        position: [f32; 3],
-        tick: u64,
-    ) -> u64 {
+    pub fn drop_item(&mut self, item_id: u32, quantity: u32, position: [f32; 3], tick: u64) -> u64 {
         let drop_id = self.next_drop_id;
         self.next_drop_id += 1;
 
@@ -225,7 +219,9 @@ impl EventManager {
         if self.day_cycle_ticks > 0 && tick.is_multiple_of(self.day_cycle_ticks) {
             self.is_day = !self.is_day;
             self.emit(GameEvent::WorldEvent {
-                event_type: WorldEventType::DayNightTransition { is_day: self.is_day },
+                event_type: WorldEventType::DayNightTransition {
+                    is_day: self.is_day,
+                },
                 tick,
             });
         }
@@ -377,10 +373,15 @@ mod tests {
         let mut em = EventManager::new();
         em.tick_periodic_events(5000, 42);
         let events = em.drain_events();
-        let has_wave = events.iter().any(|e| matches!(e, GameEvent::WorldEvent {
-            event_type: WorldEventType::EnemyWave { .. },
-            ..
-        }));
+        let has_wave = events.iter().any(|e| {
+            matches!(
+                e,
+                GameEvent::WorldEvent {
+                    event_type: WorldEventType::EnemyWave { .. },
+                    ..
+                }
+            )
+        });
         assert!(has_wave);
     }
 
@@ -396,10 +397,15 @@ mod tests {
         let mut em = EventManager::new();
         em.tick_periodic_events(1000, 42);
         let events = em.drain_events();
-        let has_respawn = events.iter().any(|e| matches!(e, GameEvent::WorldEvent {
-            event_type: WorldEventType::ResourceRespawn,
-            ..
-        }));
+        let has_respawn = events.iter().any(|e| {
+            matches!(
+                e,
+                GameEvent::WorldEvent {
+                    event_type: WorldEventType::ResourceRespawn,
+                    ..
+                }
+            )
+        });
         assert!(has_respawn);
     }
 }

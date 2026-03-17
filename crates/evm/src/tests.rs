@@ -41,8 +41,8 @@ fn test_reset_clears_state() {
 
 #[test]
 fn test_game_action_rejected_by_evm() {
-    use velochain_primitives::{Keypair, Transaction};
     use velochain_primitives::transaction::GameAction;
+    use velochain_primitives::{Keypair, Transaction};
     let mut exec = executor::EvmExecutor::new(27181);
     let kp = Keypair::random();
     let tx = Transaction::new_game_action(27181, 0, GameAction::Respawn);
@@ -100,7 +100,9 @@ fn test_estimate_gas_minimum() {
     let from = Address::repeat_byte(0x01);
     let to = Address::repeat_byte(0x02);
 
-    let gas = exec.estimate_gas(from, Some(to), U256::ZERO, vec![]).unwrap();
+    let gas = exec
+        .estimate_gas(from, Some(to), U256::ZERO, vec![])
+        .unwrap();
     assert!(gas >= 21_000); // Minimum gas for a simple transfer
 }
 

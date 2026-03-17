@@ -3,19 +3,19 @@
 //! Defines the fundamental data structures used throughout the VeloChain node:
 //! blocks, transactions, accounts, and related types.
 
-pub mod block;
-pub mod transaction;
 pub mod account;
-pub mod genesis;
+pub mod block;
 pub mod crypto;
 pub mod error;
+pub mod genesis;
+pub mod transaction;
 
-pub use block::{Block, BlockHeader, BlockBody};
-pub use transaction::{Transaction, TxType, SignedTransaction};
 pub use account::Account;
-pub use genesis::Genesis;
-pub use crypto::{Keypair, recover_signer};
+pub use block::{Block, BlockBody, BlockHeader};
+pub use crypto::{recover_signer, Keypair};
 pub use error::PrimitivesError;
+pub use genesis::Genesis;
+pub use transaction::{SignedTransaction, Transaction, TxType};
 
 /// Chain ID for VeloChain (default).
 pub const DEFAULT_CHAIN_ID: u64 = 27181;

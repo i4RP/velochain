@@ -131,7 +131,9 @@ pub struct EntityUpdate {
 
 /// Queue a move action based on player input.
 pub fn queue_move_action(net_state: &mut NetworkState, x: f32, y: f32, z: f32) {
-    net_state.pending_actions.push(ClientAction::Move { x, y, z });
+    net_state
+        .pending_actions
+        .push(ClientAction::Move { x, y, z });
 }
 
 /// Queue an attack action.
@@ -143,7 +145,9 @@ pub fn queue_attack_action(net_state: &mut NetworkState, target_id: u64) {
 
 /// Queue a chat message.
 pub fn queue_chat_action(net_state: &mut NetworkState, message: String) {
-    net_state.pending_actions.push(ClientAction::Chat { message });
+    net_state
+        .pending_actions
+        .push(ClientAction::Chat { message });
 }
 
 /// Process incoming server updates and apply them to the game world.
@@ -220,9 +224,17 @@ mod tests {
     #[test]
     fn test_client_action_variants() {
         let actions = vec![
-            ClientAction::Move { x: 1.0, y: 2.0, z: 0.0 },
-            ClientAction::Attack { target_entity_id: 5 },
-            ClientAction::Chat { message: "test".into() },
+            ClientAction::Move {
+                x: 1.0,
+                y: 2.0,
+                z: 0.0,
+            },
+            ClientAction::Attack {
+                target_entity_id: 5,
+            },
+            ClientAction::Chat {
+                message: "test".into(),
+            },
             ClientAction::Pickup { drop_id: 10 },
             ClientAction::Respawn,
         ];

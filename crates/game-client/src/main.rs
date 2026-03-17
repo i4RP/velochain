@@ -7,8 +7,8 @@ use bevy::prelude::*;
 use velochain_game_client::VeloChainClientPlugin;
 
 fn main() {
-    let rpc_url = std::env::var("VELOCHAIN_RPC_URL")
-        .unwrap_or_else(|_| "ws://127.0.0.1:9545".to_string());
+    let rpc_url =
+        std::env::var("VELOCHAIN_RPC_URL").unwrap_or_else(|_| "ws://127.0.0.1:9545".to_string());
 
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {

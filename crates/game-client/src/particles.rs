@@ -13,12 +13,15 @@ impl Plugin for ParticlePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ParticleConfig::default())
             .add_event::<ParticleEvent>()
-            .add_systems(Update, (
-                handle_particle_events,
-                update_particles,
-                update_damage_numbers,
-                update_sprite_animations,
-            ));
+            .add_systems(
+                Update,
+                (
+                    handle_particle_events,
+                    update_particles,
+                    update_damage_numbers,
+                    update_sprite_animations,
+                ),
+            );
     }
 }
 
@@ -61,30 +64,17 @@ pub enum ParticleEvent {
         is_critical: bool,
     },
     /// Heal number floating up.
-    HealNumber {
-        position: Vec3,
-        amount: i32,
-    },
+    HealNumber { position: Vec3, amount: i32 },
     /// Attack spark burst at contact point.
-    AttackSpark {
-        position: Vec3,
-    },
+    AttackSpark { position: Vec3 },
     /// Level-up celebration around an entity.
-    LevelUp {
-        position: Vec3,
-    },
+    LevelUp { position: Vec3 },
     /// Item pickup sparkle.
-    ItemPickup {
-        position: Vec3,
-    },
+    ItemPickup { position: Vec3 },
     /// Death poof effect.
-    DeathPoof {
-        position: Vec3,
-    },
+    DeathPoof { position: Vec3 },
     /// Spawn/respawn glow.
-    SpawnGlow {
-        position: Vec3,
-    },
+    SpawnGlow { position: Vec3 },
 }
 
 // ---------------------------------------------------------------------------
@@ -231,7 +221,11 @@ fn handle_particle_events(
         }
 
         match event {
-            ParticleEvent::DamageNumber { position, amount, is_critical } => {
+            ParticleEvent::DamageNumber {
+                position,
+                amount,
+                is_critical,
+            } => {
                 let color = if *is_critical {
                     Color::srgb(1.0, 0.3, 0.0)
                 } else {
@@ -241,7 +235,10 @@ fn handle_particle_events(
 
                 commands.spawn((
                     Text::new(format!("-{}", amount)),
-                    TextFont { font_size, ..default() },
+                    TextFont {
+                        font_size,
+                        ..default()
+                    },
                     TextColor(color),
                     Node {
                         position_type: PositionType::Absolute,
@@ -260,7 +257,10 @@ fn handle_particle_events(
             ParticleEvent::HealNumber { position, amount } => {
                 commands.spawn((
                     Text::new(format!("+{}", amount)),
-                    TextFont { font_size: 16.0, ..default() },
+                    TextFont {
+                        font_size: 16.0,
+                        ..default()
+                    },
                     TextColor(Color::srgb(0.2, 1.0, 0.3)),
                     Node {
                         position_type: PositionType::Absolute,
@@ -561,9 +561,20 @@ mod tests {
     fn test_all_particle_events() {
         let pos = Vec3::new(100.0, 200.0, 0.0);
         let events = vec![
-            ParticleEvent::DamageNumber { position: pos, amount: 25, is_critical: false },
-            ParticleEvent::DamageNumber { position: pos, amount: 50, is_critical: true },
-            ParticleEvent::HealNumber { position: pos, amount: 10 },
+            ParticleEvent::DamageNumber {
+                position: pos,
+                amount: 25,
+                is_critical: false,
+            },
+            ParticleEvent::DamageNumber {
+                position: pos,
+                amount: 50,
+                is_critical: true,
+            },
+            ParticleEvent::HealNumber {
+                position: pos,
+                amount: 10,
+            },
             ParticleEvent::AttackSpark { position: pos },
             ParticleEvent::LevelUp { position: pos },
             ParticleEvent::ItemPickup { position: pos },

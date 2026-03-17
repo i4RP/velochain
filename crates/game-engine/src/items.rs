@@ -130,8 +130,8 @@ pub struct DropTable {
 impl DropTable {
     /// Roll a drop from this table using a deterministic seed.
     pub fn roll(&self, seed: u64) -> Option<(ItemDefId, u32)> {
-        let total_weight: u64 = self.nothing_weight as u64
-            + self.entries.iter().map(|e| e.weight as u64).sum::<u64>();
+        let total_weight: u64 =
+            self.nothing_weight as u64 + self.entries.iter().map(|e| e.weight as u64).sum::<u64>();
         if total_weight == 0 {
             return None;
         }
@@ -190,7 +190,10 @@ impl ItemRegistry {
             category: ItemCategory::Weapon,
             rarity: ItemRarity::Common,
             max_stack: 1,
-            stats: ItemStats { attack: 5.0, ..Default::default() },
+            stats: ItemStats {
+                attack: 5.0,
+                ..Default::default()
+            },
             equip_slot: Some(EquipSlot::MainHand),
             value: 10,
         });
@@ -201,7 +204,10 @@ impl ItemRegistry {
             category: ItemCategory::Weapon,
             rarity: ItemRarity::Uncommon,
             max_stack: 1,
-            stats: ItemStats { attack: 15.0, ..Default::default() },
+            stats: ItemStats {
+                attack: 15.0,
+                ..Default::default()
+            },
             equip_slot: Some(EquipSlot::MainHand),
             value: 50,
         });
@@ -212,7 +218,10 @@ impl ItemRegistry {
             category: ItemCategory::Weapon,
             rarity: ItemRarity::Rare,
             max_stack: 1,
-            stats: ItemStats { attack: 30.0, ..Default::default() },
+            stats: ItemStats {
+                attack: 30.0,
+                ..Default::default()
+            },
             equip_slot: Some(EquipSlot::MainHand),
             value: 200,
         });
@@ -223,7 +232,11 @@ impl ItemRegistry {
             category: ItemCategory::Weapon,
             rarity: ItemRarity::Legendary,
             max_stack: 1,
-            stats: ItemStats { attack: 80.0, health_bonus: 50.0, ..Default::default() },
+            stats: ItemStats {
+                attack: 80.0,
+                health_bonus: 50.0,
+                ..Default::default()
+            },
             equip_slot: Some(EquipSlot::MainHand),
             value: 5000,
         });
@@ -236,7 +249,10 @@ impl ItemRegistry {
             category: ItemCategory::Armor,
             rarity: ItemRarity::Common,
             max_stack: 1,
-            stats: ItemStats { defense: 3.0, ..Default::default() },
+            stats: ItemStats {
+                defense: 3.0,
+                ..Default::default()
+            },
             equip_slot: Some(EquipSlot::Head),
             value: 15,
         });
@@ -247,7 +263,10 @@ impl ItemRegistry {
             category: ItemCategory::Armor,
             rarity: ItemRarity::Uncommon,
             max_stack: 1,
-            stats: ItemStats { defense: 12.0, ..Default::default() },
+            stats: ItemStats {
+                defense: 12.0,
+                ..Default::default()
+            },
             equip_slot: Some(EquipSlot::Chest),
             value: 80,
         });
@@ -258,7 +277,11 @@ impl ItemRegistry {
             category: ItemCategory::Armor,
             rarity: ItemRarity::Uncommon,
             max_stack: 1,
-            stats: ItemStats { defense: 8.0, speed_bonus: -0.05, ..Default::default() },
+            stats: ItemStats {
+                defense: 8.0,
+                speed_bonus: -0.05,
+                ..Default::default()
+            },
             equip_slot: Some(EquipSlot::Boots),
             value: 60,
         });
@@ -271,7 +294,10 @@ impl ItemRegistry {
             category: ItemCategory::Consumable,
             rarity: ItemRarity::Common,
             max_stack: 10,
-            stats: ItemStats { heal_amount: 50.0, ..Default::default() },
+            stats: ItemStats {
+                heal_amount: 50.0,
+                ..Default::default()
+            },
             equip_slot: None,
             value: 25,
         });
@@ -282,7 +308,10 @@ impl ItemRegistry {
             category: ItemCategory::Consumable,
             rarity: ItemRarity::Uncommon,
             max_stack: 10,
-            stats: ItemStats { heal_amount: 150.0, ..Default::default() },
+            stats: ItemStats {
+                heal_amount: 150.0,
+                ..Default::default()
+            },
             equip_slot: None,
             value: 75,
         });
@@ -293,7 +322,10 @@ impl ItemRegistry {
             category: ItemCategory::Consumable,
             rarity: ItemRarity::Common,
             max_stack: 20,
-            stats: ItemStats { heal_amount: 30.0, ..Default::default() },
+            stats: ItemStats {
+                heal_amount: 30.0,
+                ..Default::default()
+            },
             equip_slot: None,
             value: 5,
         });
@@ -337,36 +369,96 @@ impl ItemRegistry {
         registry.register_drop_table(DropTable {
             npc_type: "merchant".into(),
             entries: vec![
-                DropEntry { item_id: 20, weight: 30, min_quantity: 1, max_quantity: 2 },
-                DropEntry { item_id: 31, weight: 40, min_quantity: 1, max_quantity: 3 },
+                DropEntry {
+                    item_id: 20,
+                    weight: 30,
+                    min_quantity: 1,
+                    max_quantity: 2,
+                },
+                DropEntry {
+                    item_id: 31,
+                    weight: 40,
+                    min_quantity: 1,
+                    max_quantity: 3,
+                },
             ],
             nothing_weight: 50,
         });
         registry.register_drop_table(DropTable {
             npc_type: "guard".into(),
             entries: vec![
-                DropEntry { item_id: 1, weight: 20, min_quantity: 1, max_quantity: 1 },
-                DropEntry { item_id: 2, weight: 5, min_quantity: 1, max_quantity: 1 },
-                DropEntry { item_id: 10, weight: 15, min_quantity: 1, max_quantity: 1 },
-                DropEntry { item_id: 30, weight: 30, min_quantity: 1, max_quantity: 5 },
+                DropEntry {
+                    item_id: 1,
+                    weight: 20,
+                    min_quantity: 1,
+                    max_quantity: 1,
+                },
+                DropEntry {
+                    item_id: 2,
+                    weight: 5,
+                    min_quantity: 1,
+                    max_quantity: 1,
+                },
+                DropEntry {
+                    item_id: 10,
+                    weight: 15,
+                    min_quantity: 1,
+                    max_quantity: 1,
+                },
+                DropEntry {
+                    item_id: 30,
+                    weight: 30,
+                    min_quantity: 1,
+                    max_quantity: 5,
+                },
             ],
             nothing_weight: 30,
         });
         registry.register_drop_table(DropTable {
             npc_type: "wolf".into(),
             entries: vec![
-                DropEntry { item_id: 22, weight: 40, min_quantity: 1, max_quantity: 2 },
-                DropEntry { item_id: 31, weight: 20, min_quantity: 1, max_quantity: 1 },
+                DropEntry {
+                    item_id: 22,
+                    weight: 40,
+                    min_quantity: 1,
+                    max_quantity: 2,
+                },
+                DropEntry {
+                    item_id: 31,
+                    weight: 20,
+                    min_quantity: 1,
+                    max_quantity: 1,
+                },
             ],
             nothing_weight: 40,
         });
         registry.register_drop_table(DropTable {
             npc_type: "dragon".into(),
             entries: vec![
-                DropEntry { item_id: 4, weight: 2, min_quantity: 1, max_quantity: 1 },
-                DropEntry { item_id: 3, weight: 10, min_quantity: 1, max_quantity: 1 },
-                DropEntry { item_id: 32, weight: 30, min_quantity: 1, max_quantity: 3 },
-                DropEntry { item_id: 21, weight: 20, min_quantity: 1, max_quantity: 2 },
+                DropEntry {
+                    item_id: 4,
+                    weight: 2,
+                    min_quantity: 1,
+                    max_quantity: 1,
+                },
+                DropEntry {
+                    item_id: 3,
+                    weight: 10,
+                    min_quantity: 1,
+                    max_quantity: 1,
+                },
+                DropEntry {
+                    item_id: 32,
+                    weight: 30,
+                    min_quantity: 1,
+                    max_quantity: 3,
+                },
+                DropEntry {
+                    item_id: 21,
+                    weight: 20,
+                    min_quantity: 1,
+                    max_quantity: 2,
+                },
             ],
             nothing_weight: 5,
         });
@@ -419,8 +511,7 @@ fn deterministic_random(seed: u64, index: u64) -> u64 {
     hasher.update(index.to_le_bytes());
     let result = hasher.finalize();
     u64::from_le_bytes([
-        result[0], result[1], result[2], result[3],
-        result[4], result[5], result[6], result[7],
+        result[0], result[1], result[2], result[3], result[4], result[5], result[6], result[7],
     ])
 }
 

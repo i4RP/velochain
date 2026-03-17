@@ -41,7 +41,10 @@ pub enum TileType {
 impl TileType {
     /// Whether entities can walk on this tile.
     pub fn is_walkable(&self) -> bool {
-        !matches!(self, TileType::DeepWater | TileType::Mountain | TileType::Snow)
+        !matches!(
+            self,
+            TileType::DeepWater | TileType::Mountain | TileType::Snow
+        )
     }
 
     /// Movement speed multiplier on this tile (1.0 = normal).
@@ -203,13 +206,7 @@ impl TerrainGenerator {
     }
 
     /// Convert height and biome to a tile type.
-    fn tile_from_height_and_biome(
-        &self,
-        height: f64,
-        biome: Biome,
-        x: f64,
-        y: f64,
-    ) -> TileType {
+    fn tile_from_height_and_biome(&self, height: f64, biome: Biome, x: f64, y: f64) -> TileType {
         match biome {
             Biome::Ocean => {
                 if height < 0.3 {

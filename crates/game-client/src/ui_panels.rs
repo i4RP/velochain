@@ -15,11 +15,14 @@ impl Plugin for UiPanelsPlugin {
             .insert_resource(NotificationQueue::default())
             .add_event::<PanelEvent>()
             .add_systems(Startup, setup_panels)
-            .add_systems(Update, (
-                handle_panel_events,
-                handle_panel_hotkeys,
-                update_notifications,
-            ));
+            .add_systems(
+                Update,
+                (
+                    handle_panel_events,
+                    handle_panel_hotkeys,
+                    update_notifications,
+                ),
+            );
     }
 }
 
@@ -79,10 +82,15 @@ impl PanelStates {
 
     /// Count how many panels are open.
     pub fn open_count(&self) -> usize {
-        [self.crafting_open, self.quest_log_open, self.skill_tree_open, self.shop_open]
-            .iter()
-            .filter(|&&v| v)
-            .count()
+        [
+            self.crafting_open,
+            self.quest_log_open,
+            self.skill_tree_open,
+            self.shop_open,
+        ]
+        .iter()
+        .filter(|&&v| v)
+        .count()
     }
 }
 
@@ -267,7 +275,11 @@ fn setup_panels(mut commands: Commands) {
         CraftingPanel,
         vec![
             ("Recipes", 16.0, Color::srgb(0.9, 0.8, 0.3)),
-            ("Select a recipe to craft.", 12.0, Color::srgba(0.7, 0.7, 0.7, 0.8)),
+            (
+                "Select a recipe to craft.",
+                12.0,
+                Color::srgba(0.7, 0.7, 0.7, 0.8),
+            ),
             ("Materials: ---", 12.0, Color::srgba(0.7, 0.7, 0.7, 0.8)),
             ("[C] Close", 11.0, Color::srgba(0.5, 0.5, 0.5, 0.6)),
         ],
@@ -302,7 +314,11 @@ fn setup_panels(mut commands: Commands) {
         SkillTreePanel,
         vec![
             ("Skill Points: 0", 16.0, Color::srgb(0.9, 0.5, 0.2)),
-            ("No skills available.", 12.0, Color::srgba(0.7, 0.7, 0.7, 0.8)),
+            (
+                "No skills available.",
+                12.0,
+                Color::srgba(0.7, 0.7, 0.7, 0.8),
+            ),
             ("[K] Close", 11.0, Color::srgba(0.5, 0.5, 0.5, 0.6)),
         ],
     );
@@ -319,7 +335,11 @@ fn setup_panels(mut commands: Commands) {
         ShopPanel,
         vec![
             ("Items for Sale", 16.0, Color::srgb(0.9, 0.8, 0.3)),
-            ("No items available.", 12.0, Color::srgba(0.7, 0.7, 0.7, 0.8)),
+            (
+                "No items available.",
+                12.0,
+                Color::srgba(0.7, 0.7, 0.7, 0.8),
+            ),
             ("Gold: 0", 14.0, Color::srgb(1.0, 0.85, 0.0)),
             ("[B] Close", 11.0, Color::srgba(0.5, 0.5, 0.5, 0.6)),
         ],
@@ -373,7 +393,10 @@ fn spawn_panel<M: Component>(
             // Title
             parent.spawn((
                 Text::new(title),
-                TextFont { font_size: 20.0, ..default() },
+                TextFont {
+                    font_size: 20.0,
+                    ..default()
+                },
                 TextColor(Color::WHITE),
                 Node {
                     margin: UiRect::bottom(Val::Px(8.0)),
@@ -385,7 +408,10 @@ fn spawn_panel<M: Component>(
             for (text, size, color) in lines {
                 parent.spawn((
                     Text::new(text),
-                    TextFont { font_size: size, ..default() },
+                    TextFont {
+                        font_size: size,
+                        ..default()
+                    },
                     TextColor(color),
                 ));
             }
@@ -396,10 +422,30 @@ fn spawn_panel<M: Component>(
 // Systems
 // ---------------------------------------------------------------------------
 
-type CraftingQuery = (With<CraftingPanel>, Without<QuestLogPanel>, Without<SkillTreePanel>, Without<ShopPanel>);
-type QuestLogQuery = (With<QuestLogPanel>, Without<CraftingPanel>, Without<SkillTreePanel>, Without<ShopPanel>);
-type SkillTreeQuery = (With<SkillTreePanel>, Without<CraftingPanel>, Without<QuestLogPanel>, Without<ShopPanel>);
-type ShopQuery = (With<ShopPanel>, Without<CraftingPanel>, Without<QuestLogPanel>, Without<SkillTreePanel>);
+type CraftingQuery = (
+    With<CraftingPanel>,
+    Without<QuestLogPanel>,
+    Without<SkillTreePanel>,
+    Without<ShopPanel>,
+);
+type QuestLogQuery = (
+    With<QuestLogPanel>,
+    Without<CraftingPanel>,
+    Without<SkillTreePanel>,
+    Without<ShopPanel>,
+);
+type SkillTreeQuery = (
+    With<SkillTreePanel>,
+    Without<CraftingPanel>,
+    Without<QuestLogPanel>,
+    Without<ShopPanel>,
+);
+type ShopQuery = (
+    With<ShopPanel>,
+    Without<CraftingPanel>,
+    Without<QuestLogPanel>,
+    Without<SkillTreePanel>,
+);
 
 fn handle_panel_events(
     mut states: ResMut<PanelStates>,
@@ -413,11 +459,23 @@ fn handle_panel_events(
         match event {
             PanelEvent::Toggle(kind) => {
                 states.toggle(*kind);
-                sync_panel_visibility(&states, &mut crafting_q, &mut quest_q, &mut skill_q, &mut shop_q);
+                sync_panel_visibility(
+                    &states,
+                    &mut crafting_q,
+                    &mut quest_q,
+                    &mut skill_q,
+                    &mut shop_q,
+                );
             }
             PanelEvent::CloseAll => {
                 states.close_all();
-                sync_panel_visibility(&states, &mut crafting_q, &mut quest_q, &mut skill_q, &mut shop_q);
+                sync_panel_visibility(
+                    &states,
+                    &mut crafting_q,
+                    &mut quest_q,
+                    &mut skill_q,
+                    &mut shop_q,
+                );
             }
             // Other events are handled by game systems that consume them
             _ => {}
@@ -433,23 +491,36 @@ fn sync_panel_visibility(
     shop_q: &mut Query<&mut Node, ShopQuery>,
 ) {
     if let Ok(mut node) = crafting_q.get_single_mut() {
-        node.display = if states.crafting_open { Display::Flex } else { Display::None };
+        node.display = if states.crafting_open {
+            Display::Flex
+        } else {
+            Display::None
+        };
     }
     if let Ok(mut node) = quest_q.get_single_mut() {
-        node.display = if states.quest_log_open { Display::Flex } else { Display::None };
+        node.display = if states.quest_log_open {
+            Display::Flex
+        } else {
+            Display::None
+        };
     }
     if let Ok(mut node) = skill_q.get_single_mut() {
-        node.display = if states.skill_tree_open { Display::Flex } else { Display::None };
+        node.display = if states.skill_tree_open {
+            Display::Flex
+        } else {
+            Display::None
+        };
     }
     if let Ok(mut node) = shop_q.get_single_mut() {
-        node.display = if states.shop_open { Display::Flex } else { Display::None };
+        node.display = if states.shop_open {
+            Display::Flex
+        } else {
+            Display::None
+        };
     }
 }
 
-fn handle_panel_hotkeys(
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut events: EventWriter<PanelEvent>,
-) {
+fn handle_panel_hotkeys(keyboard: Res<ButtonInput<KeyCode>>, mut events: EventWriter<PanelEvent>) {
     if keyboard.just_pressed(KeyCode::KeyC) {
         events.send(PanelEvent::Toggle(PanelKind::Crafting));
     }
@@ -467,10 +538,7 @@ fn handle_panel_hotkeys(
     }
 }
 
-fn update_notifications(
-    time: Res<Time>,
-    mut queue: ResMut<NotificationQueue>,
-) {
+fn update_notifications(time: Res<Time>, mut queue: ResMut<NotificationQueue>) {
     let dt = time.delta_secs();
     for notification in queue.notifications.iter_mut() {
         notification.remaining -= dt;
@@ -607,11 +675,23 @@ mod tests {
             PanelEvent::CloseAll,
             PanelEvent::SelectRecipe { recipe_id: 1 },
             PanelEvent::CraftItem { recipe_id: 1 },
-            PanelEvent::SelectQuest { quest_id: "q1".into() },
-            PanelEvent::AbandonQuest { quest_id: "q1".into() },
-            PanelEvent::AllocateSkill { skill_id: "s1".into() },
-            PanelEvent::ShopBuy { item_id: 1, quantity: 2 },
-            PanelEvent::ShopSell { item_id: 1, quantity: 1 },
+            PanelEvent::SelectQuest {
+                quest_id: "q1".into(),
+            },
+            PanelEvent::AbandonQuest {
+                quest_id: "q1".into(),
+            },
+            PanelEvent::AllocateSkill {
+                skill_id: "s1".into(),
+            },
+            PanelEvent::ShopBuy {
+                item_id: 1,
+                quantity: 2,
+            },
+            PanelEvent::ShopSell {
+                item_id: 1,
+                quantity: 1,
+            },
         ];
         assert_eq!(events.len(), 9);
     }

@@ -37,12 +37,10 @@ impl Default for LogConfig {
 /// If the `RUST_LOG` environment variable is set, it takes precedence
 /// over the configured filter.
 pub fn init_logging(config: &LogConfig) {
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(&config.filter));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&config.filter));
 
-    let layer = fmt::layer()
-        .with_target(true)
-        .with_thread_ids(false);
+    let layer = fmt::layer().with_target(true).with_thread_ids(false);
 
     if config.timestamps {
         tracing_subscriber::registry()

@@ -148,9 +148,7 @@ pub fn export_snapshot(
 
     info!(
         "Snapshot exported: {} blocks, game_tick={}, file={:?}",
-        meta.block_count,
-        meta.game_tick,
-        output_path
+        meta.block_count, meta.game_tick, output_path
     );
 
     Ok(meta)
@@ -241,7 +239,10 @@ pub fn import_snapshot(
 
     // Import blocks into database
     for snap_block in &blocks {
-        let block = Block::new(snap_block.header.clone(), snap_block.body.transactions.clone());
+        let block = Block::new(
+            snap_block.header.clone(),
+            snap_block.body.transactions.clone(),
+        );
         db.put_block(&block)?;
     }
 

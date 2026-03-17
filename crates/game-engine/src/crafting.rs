@@ -3,7 +3,7 @@
 //! All crafting is deterministic and processed as part of the game tick.
 //! Recipes define required materials and the resulting item.
 
-use crate::items::{ItemCategory, ItemDefId, ItemRarity, ItemRegistry, ItemStats, ItemDef};
+use crate::items::{ItemCategory, ItemDef, ItemDefId, ItemRarity, ItemRegistry, ItemStats};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -91,7 +91,7 @@ impl CraftingRegistry {
             id: 2,
             name: "Craft Iron Sword".into(),
             materials: vec![(30, 5), (31, 2)], // 5 Iron Ore + 2 Wood
-            result_item_id: 2,                  // Iron Sword
+            result_item_id: 2,                 // Iron Sword
             result_quantity: 1,
             required_level: 3,
             craft_ticks: 0,
@@ -101,7 +101,7 @@ impl CraftingRegistry {
             id: 3,
             name: "Forge Steel Greatsword".into(),
             materials: vec![(30, 15), (31, 5)], // 15 Iron Ore + 5 Wood
-            result_item_id: 3,                   // Steel Greatsword
+            result_item_id: 3,                  // Steel Greatsword
             result_quantity: 1,
             required_level: 8,
             craft_ticks: 0,
@@ -111,7 +111,7 @@ impl CraftingRegistry {
             id: 4,
             name: "Forge Dragon Slayer".into(),
             materials: vec![(30, 30), (32, 5), (31, 10)], // 30 Iron + 5 Dragon Scale + 10 Wood
-            result_item_id: 4,                              // Dragon Slayer
+            result_item_id: 4,                            // Dragon Slayer
             result_quantity: 1,
             required_level: 15,
             craft_ticks: 0,
@@ -133,7 +133,7 @@ impl CraftingRegistry {
             id: 11,
             name: "Forge Iron Chestplate".into(),
             materials: vec![(30, 10), (31, 3)], // 10 Iron + 3 Wood
-            result_item_id: 11,                  // Iron Chestplate
+            result_item_id: 11,                 // Iron Chestplate
             result_quantity: 1,
             required_level: 5,
             craft_ticks: 0,
@@ -143,7 +143,7 @@ impl CraftingRegistry {
             id: 12,
             name: "Forge Steel Boots".into(),
             materials: vec![(30, 8), (31, 2)], // 8 Iron + 2 Wood
-            result_item_id: 12,                 // Steel Boots
+            result_item_id: 12,                // Steel Boots
             result_quantity: 1,
             required_level: 4,
             craft_ticks: 0,
@@ -165,7 +165,7 @@ impl CraftingRegistry {
             id: 21,
             name: "Brew Greater Health Potion".into(),
             materials: vec![(20, 3), (32, 1)], // 3 Health Potions + 1 Dragon Scale
-            result_item_id: 21,                 // Greater Health Potion
+            result_item_id: 21,                // Greater Health Potion
             result_quantity: 1,
             required_level: 10,
             craft_ticks: 0,
@@ -187,7 +187,7 @@ impl CraftingRegistry {
             id: 30,
             name: "Smelt Iron Ingot".into(),
             materials: vec![(30, 3), (31, 1)], // 3 Iron Ore + 1 Wood (fuel)
-            result_item_id: 30,                 // Iron Ore (represents ingot, same ID)
+            result_item_id: 30,                // Iron Ore (represents ingot, same ID)
             result_quantity: 2,
             required_level: 2,
             craft_ticks: 0,
@@ -281,7 +281,12 @@ impl CraftingRegistry {
         inventory: &mut HashMap<ItemDefId, u32>,
     ) -> CraftResult {
         let result = self.can_craft(recipe_id, player_level, inventory);
-        if let CraftResult::Success { recipe_id: rid, item_id, quantity } = &result {
+        if let CraftResult::Success {
+            recipe_id: rid,
+            item_id,
+            quantity,
+        } = &result
+        {
             let recipe = self.get(*rid).unwrap();
             // Consume materials
             for &(mat_id, mat_qty) in &recipe.materials {
@@ -382,7 +387,13 @@ mod tests {
 
         // Iron Sword requires level 3
         let result = registry.can_craft(2, 1, &inventory);
-        assert!(matches!(result, CraftResult::LevelTooLow { required: 3, current: 1 }));
+        assert!(matches!(
+            result,
+            CraftResult::LevelTooLow {
+                required: 3,
+                current: 1
+            }
+        ));
     }
 
     #[test]

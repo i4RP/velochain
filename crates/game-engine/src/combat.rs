@@ -204,12 +204,8 @@ impl CombatResolver {
             };
             let defender_stats = stats.get(&action.target_id).cloned().unwrap_or_default();
 
-            let damage = calculate_damage(
-                attacker_stats,
-                &defender_stats,
-                tick,
-                action.attacker_id,
-            );
+            let damage =
+                calculate_damage(attacker_stats, &defender_stats, tick, action.attacker_id);
 
             let entry = CombatLogEntry {
                 tick,
@@ -280,8 +276,16 @@ mod tests {
 
     #[test]
     fn test_range_check() {
-        let a = PositionComponent { x: 0.0, y: 0.0, z: 0.0 };
-        let b = PositionComponent { x: 1.0, y: 0.0, z: 0.0 };
+        let a = PositionComponent {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        };
+        let b = PositionComponent {
+            x: 1.0,
+            y: 0.0,
+            z: 0.0,
+        };
         assert!(is_in_range(&a, &b, 2.0));
         assert!(!is_in_range(&a, &b, 0.5));
     }

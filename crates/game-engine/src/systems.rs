@@ -15,7 +15,11 @@ pub fn run_tick(world: &mut EcsWorld, tick: u64) {
     npc_ai_system(world, tick);
     combat_system(world, tick);
     respawn_system(world, tick);
-    debug!("Game tick {} complete, entities={}", tick, world.entity_count());
+    debug!(
+        "Game tick {} complete, entities={}",
+        tick,
+        world.entity_count()
+    );
 }
 
 /// Physics system: apply velocity, gravity, collision.
