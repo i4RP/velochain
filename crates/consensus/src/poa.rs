@@ -6,8 +6,8 @@
 use alloy_primitives::{Address, B256, B64, Bloom, U256};
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use tracing::{debug, warn};
-use velochain_primitives::{BlockHeader, Block, DEFAULT_BLOCK_GAS_LIMIT};
+use tracing::{debug, info, warn};
+use velochain_primitives::{BlockHeader, Block, Keypair, DEFAULT_BLOCK_GAS_LIMIT};
 
 use crate::{ConsensusEngine, ConsensusError};
 
@@ -34,7 +34,9 @@ impl Default for PoaConfig {
 
 /// Proof-of-Authority consensus engine.
 pub struct PoaConsensus {
-    /// Our validator address (None if we're not a validator).
+    /// Validator keypair for signing blocks (None if not a validator).
+    keypair: Option<Keypair>,
+    /// Our validator address (derived from keypair, or None).
     local_address: Option<Address>,
     /// Current validator set.
     validators: RwLock<Vec<Address>>,
@@ -45,14 +47,28 @@ pub struct PoaConsensus {
 }
 
 impl PoaConsensus {
-    /// Create a new PoA consensus engine.
-    pub fn new(
-        local_address: Option<Address>,
+    /// Create a new PoA consensus engine with a validator keypair.
+    pub fn new_with_keypair(
+        keypair: Keypair,
         validators: Vec<Address>,
         config: PoaConfig,
     ) -> Self {
+        let address = keypair.address();
+        info!("PoA consensus initialized with validator address: {:?}", address);
         Self {
-            local_address,
+            keypair: Some(keypair),
+            local_address: Some(address),
+            validators: RwLock::new(validators),
+            config,
+            game_tick: RwLock::new(0),
+        }
+    }
+
+    /// Create a new PoA consensus engine without a validator key (read-only node).
+    pub fn new_readonly(validators: Vec<Address>, config: PoaConfig) -> Self {
+        Self {
+            keypair: None,
+            local_address: None,
             validators: RwLock::new(validators),
             config,
             game_tick: RwLock::new(0),
@@ -201,12 +217,30 @@ impl ConsensusEngine for PoaConsensus {
     }
 
     fn seal_block(&self, block: &mut Block) -> Result<(), ConsensusError> {
-        // In a full implementation, we would sign the block hash with our private key.
-        // For now, we embed our address in extra_data as a placeholder.
-        if let Some(addr) = self.local_address {
-            block.header.extra_data = addr.as_slice().to_vec();
-        }
-        debug!("Block sealed: number={}, hash={}", block.number(), block.hash());
+        let keypair = self
+            .keypair
+            .as_ref()
+            .ok_or(ConsensusError::NotValidator)?;
+
+        // Sign the block hash with our validator private key.
+        // The signature is stored in extra_data as: [32 bytes R | 32 bytes S | 1 byte V]
+        let block_hash = block.header.hash();
+        let (sig, recid) = keypair
+            .sign_hash(&block_hash)
+            .map_err(|e| ConsensusError::SealError(format!("Signing failed: {e}")))?;
+
+        let sig_bytes = sig.to_bytes();
+        let mut extra_data = Vec::with_capacity(65);
+        extra_data.extend_from_slice(&sig_bytes); // 64 bytes (R + S)
+        extra_data.push(recid.to_byte()); // 1 byte (V)
+        block.header.extra_data = extra_data;
+
+        debug!(
+            "Block sealed: number={}, hash={}, signer={:?}",
+            block.number(),
+            block.hash(),
+            keypair.address()
+        );
         Ok(())
     }
 

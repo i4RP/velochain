@@ -90,7 +90,7 @@ impl GameWorld {
     /// Load a game world from serialized state.
     pub fn from_state(data: &[u8], seed: u64) -> Result<Self, GameEngineError> {
         let ecs = EcsWorld::deserialize(data)
-            .map_err(|e| GameEngineError::Serialization(e))?;
+            .map_err(GameEngineError::Serialization)?;
         let tick = 0; // Will be updated from chain state
         Ok(Self {
             ecs: RwLock::new(ecs),
@@ -275,7 +275,7 @@ impl GameWorld {
         self.ecs
             .read()
             .serialize()
-            .map_err(|e| GameEngineError::Serialization(e))
+            .map_err(GameEngineError::Serialization)
     }
 
     /// Compute the game state root hash.
@@ -287,5 +287,54 @@ impl GameWorld {
     /// Get the world seed.
     pub fn seed(&self) -> u64 {
         self.seed
+    }
+
+    /// Get the number of player entities.
+    pub fn player_count(&self) -> usize {
+        self.ecs.read().player_entities().len()
+    }
+
+    /// Get player info by on-chain address (for RPC queries).
+    pub fn get_player_info(&self, address: &str) -> Option<crate::game_api_types::PlayerInfo> {
+        let ecs = self.ecs.read();
+        let players = ecs.player_entities();
+        for entity_id in players {
+            if let Some(components) = ecs.get_components(entity_id) {
+                let mut is_match = false;
+                let mut info = crate::game_api_types::PlayerInfo {
+                    entity_id,
+                    address: String::new(),
+                    position: [0.0, 0.0, 0.0],
+                    health: 0.0,
+                    max_health: 0.0,
+                    level: 0,
+                    is_alive: true,
+                };
+                for component in components {
+                    match component {
+                        Component::Player(player) => {
+                            if player.address == address {
+                                is_match = true;
+                                info.address = player.address.clone();
+                                info.level = player.level;
+                            }
+                        }
+                        Component::Position(pos) => {
+                            info.position = [pos.x, pos.y, pos.z];
+                        }
+                        Component::Health(health) => {
+                            info.health = health.current;
+                            info.max_health = health.maximum;
+                            info.is_alive = !health.is_dead;
+                        }
+                        _ => {}
+                    }
+                }
+                if is_match {
+                    return Some(info);
+                }
+            }
+        }
+        None
     }
 }

@@ -1,5 +1,9 @@
 use alloy_primitives::{Address, B256, U256};
 use serde::{Deserialize, Serialize};
+use sha3::{Digest, Keccak256};
+
+use crate::crypto::{self, Keypair};
+use crate::PrimitivesError;
 
 /// Transaction type identifier.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -84,17 +88,65 @@ pub struct SignedTransaction {
     pub hash: B256,
 }
 
+impl Transaction {
+    /// Compute the signing hash for this transaction.
+    pub fn signing_hash(&self) -> B256 {
+        let encoded = serde_json::to_vec(self).unwrap_or_default();
+        B256::from_slice(&Keccak256::digest(&encoded))
+    }
+
+    /// Sign this transaction with the given keypair, producing a SignedTransaction.
+    pub fn sign(self, keypair: &Keypair) -> Result<SignedTransaction, PrimitivesError> {
+        let hash = self.signing_hash();
+        let (sig, recid) = keypair.sign_hash(&hash)?;
+        let sig_bytes = sig.to_bytes();
+
+        let mut r_bytes = [0u8; 32];
+        let mut s_bytes = [0u8; 32];
+        r_bytes.copy_from_slice(&sig_bytes[..32]);
+        s_bytes.copy_from_slice(&sig_bytes[32..]);
+
+        let signature = Signature {
+            v: recid.to_byte() as u64,
+            r: U256::from_be_bytes(r_bytes),
+            s: U256::from_be_bytes(s_bytes),
+        };
+
+        let tx_hash = SignedTransaction::compute_hash(&self, &signature);
+        Ok(SignedTransaction {
+            transaction: self,
+            signature,
+            hash: tx_hash,
+        })
+    }
+
+    /// Create a game action transaction.
+    pub fn new_game_action(chain_id: u64, nonce: u64, action: GameAction) -> Self {
+        Self {
+            tx_type: TxType::GameAction,
+            chain_id,
+            nonce,
+            gas_price: Some(1_000_000_000), // 1 gwei
+            max_fee_per_gas: None,
+            max_priority_fee_per_gas: None,
+            gas_limit: 100_000,
+            to: None,
+            value: U256::ZERO,
+            input: Vec::new(),
+            game_action: Some(action),
+        }
+    }
+}
+
 impl SignedTransaction {
     /// Compute the hash of this transaction.
     pub fn compute_hash(tx: &Transaction, sig: &Signature) -> B256 {
-        use sha3::{Digest, Keccak256};
         let mut data = serde_json::to_vec(tx).unwrap_or_default();
         data.extend_from_slice(&serde_json::to_vec(sig).unwrap_or_default());
-        let hash = Keccak256::digest(&data);
-        B256::from_slice(&hash)
+        B256::from_slice(&Keccak256::digest(&data))
     }
 
-    /// Create a new signed transaction.
+    /// Create a new signed transaction (manually providing signature).
     pub fn new(transaction: Transaction, signature: Signature) -> Self {
         let hash = Self::compute_hash(&transaction, &signature);
         Self {
@@ -104,13 +156,12 @@ impl SignedTransaction {
         }
     }
 
-    /// Get the sender address from the signature.
-    pub fn sender(&self) -> Result<Address, crate::PrimitivesError> {
-        // TODO: Recover sender from ECDSA signature using k256
-        // For now, return a placeholder
-        Err(crate::PrimitivesError::SignatureError(
-            "Signature recovery not yet implemented".to_string(),
-        ))
+    /// Recover the sender address from the ECDSA signature.
+    pub fn sender(&self) -> Result<Address, PrimitivesError> {
+        let signing_hash = self.transaction.signing_hash();
+        let r_bytes: [u8; 32] = self.signature.r.to_be_bytes();
+        let s_bytes: [u8; 32] = self.signature.s.to_be_bytes();
+        crypto::recover_signer(&signing_hash, self.signature.v, &r_bytes, &s_bytes)
     }
 
     /// Check if this is a game action transaction.
@@ -121,5 +172,38 @@ impl SignedTransaction {
     /// Get the game action if this is a game action transaction.
     pub fn game_action(&self) -> Option<&GameAction> {
         self.transaction.game_action.as_ref()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sign_and_recover_sender() {
+        let kp = Keypair::random();
+        let tx = Transaction::new_game_action(
+            27181,
+            0,
+            GameAction::Move {
+                x: 1000,
+                y: 2000,
+                z: 3000,
+            },
+        );
+
+        let signed = tx.sign(&kp).unwrap();
+        let recovered_sender = signed.sender().unwrap();
+        assert_eq!(recovered_sender, kp.address());
+    }
+
+    #[test]
+    fn test_game_action_tx() {
+        let kp = Keypair::random();
+        let tx = Transaction::new_game_action(27181, 0, GameAction::Respawn);
+        let signed = tx.sign(&kp).unwrap();
+
+        assert!(signed.is_game_action());
+        assert_eq!(signed.game_action(), Some(&GameAction::Respawn));
     }
 }

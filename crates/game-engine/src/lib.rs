@@ -8,6 +8,8 @@ pub mod error;
 pub mod world;
 pub mod systems;
 pub mod ecs;
+pub mod game_api_types;
 
 pub use error::GameEngineError;
 pub use world::GameWorld;
+pub use game_api_types::PlayerInfo;

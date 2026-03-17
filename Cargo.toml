@@ -24,7 +24,7 @@ repository = "https://github.com/velochain/velochain"
 # Ethereum / EVM
 revm = { version = "19", default-features = false, features = ["std"] }
 alloy-primitives = { version = "0.8", features = ["serde", "rlp"] }
-alloy-rlp = "0.3"
+alloy-rlp = { version = "0.3", features = ["derive"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -68,7 +68,7 @@ async-trait = "0.1"
 # Utils
 thiserror = "2"
 anyhow = "1"
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 hex = "0.4"
 bytes = "1"
 parking_lot = "0.12"

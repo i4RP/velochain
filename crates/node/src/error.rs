@@ -34,4 +34,7 @@ pub enum NodeError {
 
     #[error("Node not initialized")]
     NotInitialized,
+
+    #[error("Internal error: {0}")]
+    Internal(String),
 }

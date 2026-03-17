@@ -25,4 +25,7 @@ pub enum ConsensusError {
 
     #[error("Duplicate block at height {0}")]
     DuplicateBlock(u64),
+
+    #[error("Seal error: {0}")]
+    SealError(String),
 }
