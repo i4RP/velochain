@@ -15,6 +15,7 @@ velochain-evm = { workspace = true }
 velochain-game-engine = { workspace = true }
 velochain-txpool = { workspace = true }
 velochain-rpc = { workspace = true }
+alloy-primitives = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }

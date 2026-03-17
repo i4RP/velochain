@@ -294,6 +294,82 @@ impl GameWorld {
         self.ecs.read().player_entities().len()
     }
 
+    /// Get all player infos (for snapshot queries).
+    pub fn get_all_players(&self) -> Vec<crate::game_api_types::PlayerInfo> {
+        let ecs = self.ecs.read();
+        let players = ecs.player_entities();
+        let mut result = Vec::new();
+        for entity_id in players {
+            if let Some(components) = ecs.get_components(entity_id) {
+                let mut info = crate::game_api_types::PlayerInfo {
+                    entity_id,
+                    address: String::new(),
+                    position: [0.0, 0.0, 0.0],
+                    health: 0.0,
+                    max_health: 0.0,
+                    level: 0,
+                    is_alive: true,
+                };
+                for component in components {
+                    match component {
+                        Component::Player(player) => {
+                            info.address = player.address.clone();
+                            info.level = player.level;
+                        }
+                        Component::Position(pos) => {
+                            info.position = [pos.x, pos.y, pos.z];
+                        }
+                        Component::Health(health) => {
+                            info.health = health.current;
+                            info.max_health = health.maximum;
+                            info.is_alive = !health.is_dead;
+                        }
+                        _ => {}
+                    }
+                }
+                result.push(info);
+            }
+        }
+        result
+    }
+
+    /// Get entities within a given area (bounding box query).
+    pub fn get_entities_in_area(
+        &self,
+        min_x: f32,
+        min_y: f32,
+        max_x: f32,
+        max_y: f32,
+    ) -> Vec<crate::game_api_types::EntitySnapshot> {
+        let ecs = self.ecs.read();
+        let mut result = Vec::new();
+        for (entity_id, components) in ecs.all_entities() {
+            let mut pos = None;
+            let mut entity_type = "unknown".to_string();
+            let mut health = None;
+            for component in components {
+                match component {
+                    Component::Position(p) => pos = Some(p),
+                    Component::Player(player) => entity_type = format!("player:{}", player.address),
+                    Component::Npc(npc) => entity_type = format!("npc:{}", npc.npc_type),
+                    Component::Health(h) => health = Some((h.current, h.maximum, h.is_dead)),
+                    _ => {}
+                }
+            }
+            if let Some(p) = pos {
+                if p.x >= min_x && p.x <= max_x && p.y >= min_y && p.y <= max_y {
+                    result.push(crate::game_api_types::EntitySnapshot {
+                        entity_id: *entity_id,
+                        entity_type,
+                        position: [p.x, p.y, p.z],
+                        health: health.map(|(c, m, d)| [c, m, if d { 1.0 } else { 0.0 }]),
+                    });
+                }
+            }
+        }
+        result
+    }
+
     /// Get player info by on-chain address (for RPC queries).
     pub fn get_player_info(&self, address: &str) -> Option<crate::game_api_types::PlayerInfo> {
         let ecs = self.ecs.read();

@@ -171,6 +171,11 @@ impl EcsWorld {
         self.entities_with(|c| matches!(c, Component::Npc(_)))
     }
 
+    /// Iterate over all entities and their components.
+    pub fn all_entities(&self) -> impl Iterator<Item = (&EntityId, &Vec<Component>)> {
+        self.entities.iter()
+    }
+
     /// Get total entity count.
     pub fn entity_count(&self) -> usize {
         self.entities.len()
