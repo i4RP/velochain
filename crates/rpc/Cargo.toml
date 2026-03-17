@@ -11,6 +11,8 @@ velochain-storage = { workspace = true }
 velochain-state = { workspace = true }
 velochain-txpool = { workspace = true }
 velochain-game-engine = { workspace = true }
+velochain-evm = { workspace = true }
+parking_lot = { workspace = true }
 jsonrpsee = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }

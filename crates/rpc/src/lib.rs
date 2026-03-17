@@ -2,11 +2,15 @@
 //!
 //! Provides Ethereum-compatible JSON-RPC endpoints plus
 //! game-specific endpoints for querying world state.
+//! Supports both HTTP and WebSocket connections for real-time
+//! game state streaming via subscriptions.
 
 pub mod error;
 pub mod server;
 pub mod eth_api;
 pub mod game_api;
+pub mod subscriptions;
 
 pub use error::RpcError;
 pub use server::RpcServer;
+pub use subscriptions::{EventSender, GameEvent, new_event_channel};
