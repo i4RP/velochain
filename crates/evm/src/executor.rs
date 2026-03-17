@@ -223,4 +223,108 @@ impl EvmExecutor {
             .map(|a| a.info.nonce)
             .unwrap_or(0)
     }
+
+    /// Get an account's code from the EVM state.
+    pub fn get_code(&self, address: Address) -> Vec<u8> {
+        self.db
+            .accounts
+            .get(&address)
+            .and_then(|a| a.info.code.as_ref())
+            .map(|c| c.bytes_slice().to_vec())
+            .unwrap_or_default()
+    }
+
+    /// Simulate a call without committing state changes (eth_call).
+    /// Returns the output bytes or an error.
+    pub fn simulate_call(
+        &self,
+        from: Address,
+        to: Option<Address>,
+        value: U256,
+        data: Vec<u8>,
+        gas_limit: u64,
+    ) -> Result<ExecutionOutcome, EvmError> {
+        // Clone the DB so we don't mutate the original
+        let mut db = self.db.clone();
+
+        let mut evm = Evm::builder()
+            .with_db(&mut db)
+            .modify_tx_env(|tx_env| {
+                tx_env.caller = from;
+                tx_env.transact_to = match to {
+                    Some(addr) => TransactTo::Call(addr),
+                    None => TransactTo::Create,
+                };
+                tx_env.value = value;
+                tx_env.data = data.into();
+                tx_env.gas_limit = gas_limit;
+                tx_env.gas_price = U256::ZERO;
+                tx_env.nonce = None; // Skip nonce check for calls
+                tx_env.chain_id = Some(self.chain_id);
+            })
+            .modify_cfg_env(|cfg| {
+                cfg.chain_id = self.chain_id;
+            })
+            .build();
+
+        let result = evm
+            .transact()
+            .map_err(|e| EvmError::Internal(format!("{:?}", e)))?;
+
+        match result.result {
+            ExecutionResult::Success {
+                gas_used,
+                output,
+                logs,
+                ..
+            } => {
+                let (output_data, contract_address) = match output {
+                    Output::Call(data) => (data.to_vec(), None),
+                    Output::Create(data, addr) => (data.to_vec(), addr),
+                };
+                let converted_logs: Vec<Log> = logs
+                    .into_iter()
+                    .map(|log| Log {
+                        address: log.address,
+                        topics: log.topics().to_vec(),
+                        data: log.data.data.to_vec(),
+                    })
+                    .collect();
+                Ok(ExecutionOutcome {
+                    success: true,
+                    gas_used,
+                    output: output_data,
+                    logs: converted_logs,
+                    contract_address,
+                })
+            }
+            ExecutionResult::Revert { gas_used, output } => {
+                Ok(ExecutionOutcome {
+                    success: false,
+                    gas_used,
+                    output: output.to_vec(),
+                    logs: vec![],
+                    contract_address: None,
+                })
+            }
+            ExecutionResult::Halt { reason, gas_used } => {
+                Err(EvmError::Halt(format!("{:?}, gas_used={}", reason, gas_used)))
+            }
+        }
+    }
+
+    /// Estimate the gas needed for a transaction (eth_estimateGas).
+    pub fn estimate_gas(
+        &self,
+        from: Address,
+        to: Option<Address>,
+        value: U256,
+        data: Vec<u8>,
+    ) -> Result<u64, EvmError> {
+        // Run with high gas limit to see actual usage
+        let result = self.simulate_call(from, to, value, data, 30_000_000)?;
+        // Add 20% buffer to the gas used
+        let estimated = result.gas_used + result.gas_used / 5;
+        Ok(estimated.max(21_000)) // Minimum 21k gas
+    }
 }

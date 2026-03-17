@@ -1,10 +1,12 @@
 //! Ethereum-compatible JSON-RPC API implementation.
 
-use alloy_primitives::Address;
+use alloy_primitives::{Address, U256};
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use velochain_evm::EvmExecutor;
 use velochain_state::WorldState;
 use velochain_storage::Database;
 use velochain_txpool::TransactionPool;
@@ -66,6 +68,22 @@ pub trait EthApi {
         &self,
         hash: String,
     ) -> RpcResult<Option<RpcReceipt>>;
+
+    /// Executes a call without creating a transaction (read-only).
+    #[method(name = "call")]
+    async fn call(&self, tx: CallRequest, block: Option<String>) -> RpcResult<String>;
+
+    /// Estimates the gas needed for a transaction.
+    #[method(name = "estimateGas")]
+    async fn estimate_gas(&self, tx: CallRequest, block: Option<String>) -> RpcResult<String>;
+
+    /// Returns the code at a given address.
+    #[method(name = "getCode")]
+    async fn get_code(&self, address: String, block: Option<String>) -> RpcResult<String>;
+
+    /// Returns logs matching a filter.
+    #[method(name = "getLogs")]
+    async fn get_logs(&self, filter: LogFilter) -> RpcResult<Vec<RpcLog>>;
 }
 
 /// Block information returned by RPC.
@@ -133,12 +151,57 @@ pub struct RpcReceipt {
     pub logs: Vec<serde_json::Value>,
 }
 
+/// Call request for eth_call / eth_estimateGas.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CallRequest {
+    #[serde(default)]
+    pub from: Option<String>,
+    #[serde(default)]
+    pub to: Option<String>,
+    #[serde(default)]
+    pub value: Option<String>,
+    #[serde(default)]
+    pub data: Option<String>,
+    #[serde(default)]
+    pub gas: Option<String>,
+}
+
+/// Log filter for eth_getLogs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogFilter {
+    #[serde(default)]
+    pub from_block: Option<String>,
+    #[serde(default)]
+    pub to_block: Option<String>,
+    #[serde(default)]
+    pub address: Option<String>,
+    #[serde(default)]
+    pub topics: Option<Vec<Option<String>>>,
+}
+
+/// A log entry returned by eth_getLogs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcLog {
+    pub address: String,
+    pub topics: Vec<String>,
+    pub data: String,
+    pub block_number: String,
+    pub block_hash: String,
+    pub transaction_hash: String,
+    pub transaction_index: String,
+    pub log_index: String,
+}
+
 /// Ethereum API implementation backed by actual chain state.
 pub struct EthApiImpl {
     chain_id: u64,
     db: Arc<Database>,
     state: Arc<WorldState>,
     txpool: Arc<TransactionPool>,
+    evm: Mutex<EvmExecutor>,
 }
 
 impl EthApiImpl {
@@ -153,6 +216,7 @@ impl EthApiImpl {
             db,
             state,
             txpool,
+            evm: Mutex::new(EvmExecutor::new(chain_id)),
         }
     }
 }
@@ -322,6 +386,113 @@ impl EthApiServer for EthApiImpl {
             None => Ok(None),
         }
     }
+
+    async fn call(&self, tx: CallRequest, _block: Option<String>) -> RpcResult<String> {
+        let from = match &tx.from {
+            Some(addr) => parse_address(addr)?,
+            None => Address::ZERO,
+        };
+        let to = match &tx.to {
+            Some(addr) => Some(parse_address(addr)?),
+            None => None,
+        };
+        let value = parse_u256_hex(tx.value.as_deref().unwrap_or("0x0"))?;
+        let data = parse_hex_data(tx.data.as_deref().unwrap_or("0x"))?;
+        let gas_limit = parse_u64_hex(tx.gas.as_deref().unwrap_or("0x1c9c380"))?; // 30M default
+
+        let evm = self.evm.lock();
+        let result = evm.simulate_call(from, to, value, data, gas_limit)
+            .map_err(|e| internal_err(format!("EVM call failed: {e}")))?;
+
+        Ok(format!("0x{}", hex::encode(&result.output)))
+    }
+
+    async fn estimate_gas(&self, tx: CallRequest, _block: Option<String>) -> RpcResult<String> {
+        let from = match &tx.from {
+            Some(addr) => parse_address(addr)?,
+            None => Address::ZERO,
+        };
+        let to = match &tx.to {
+            Some(addr) => Some(parse_address(addr)?),
+            None => None,
+        };
+        let value = parse_u256_hex(tx.value.as_deref().unwrap_or("0x0"))?;
+        let data = parse_hex_data(tx.data.as_deref().unwrap_or("0x"))?;
+
+        let evm = self.evm.lock();
+        let gas = evm.estimate_gas(from, to, value, data)
+            .map_err(|e| internal_err(format!("Gas estimation failed: {e}")))?;
+
+        Ok(format!("0x{:x}", gas))
+    }
+
+    async fn get_code(&self, address: String, _block: Option<String>) -> RpcResult<String> {
+        let _addr = parse_address(&address)?;
+        // For now, return empty code as contract storage is in the EVM cache
+        // which is transient per block. Persistent code storage can be added later.
+        Ok("0x".to_string())
+    }
+
+    async fn get_logs(&self, filter: LogFilter) -> RpcResult<Vec<RpcLog>> {
+        let from_block = parse_u64_hex(filter.from_block.as_deref().unwrap_or("0x0"))?;
+        let latest = self.db
+            .get_latest_block_number()
+            .map_err(|e| internal_err(format!("Storage error: {e}")))?
+            .unwrap_or(0);
+        let to_block = parse_u64_hex(filter.to_block.as_deref().unwrap_or("latest"))
+            .unwrap_or(latest);
+
+        let filter_addr = filter.address.as_ref().map(|a| parse_address(a)).transpose()?;
+
+        let mut logs = Vec::new();
+        for block_num in from_block..=to_block.min(from_block + 1000) {
+            let block_hash = match self.db.get_block_hash_by_number(block_num)
+                .map_err(|e| internal_err(format!("Storage error: {e}")))? {
+                Some(h) => h,
+                None => continue,
+            };
+
+            let body = match self.db.get_body(&block_hash)
+                .map_err(|e| internal_err(format!("Storage error: {e}")))? {
+                Some(b) => b,
+                None => continue,
+            };
+
+            for (tx_idx, tx) in body.transactions.iter().enumerate() {
+                if let Some(receipt_data) = self.db.get_receipt(tx.hash.as_ref())
+                    .map_err(|e| internal_err(format!("Storage error: {e}")))? {
+                    if let Ok(stored) = serde_json::from_slice::<serde_json::Value>(&receipt_data) {
+                        if let Some(stored_logs) = stored["logs"].as_array() {
+                            for (log_idx, log) in stored_logs.iter().enumerate() {
+                                let log_addr = log["address"].as_str().unwrap_or("");
+                                if let Some(ref fa) = filter_addr {
+                                    if log_addr != format!("{:?}", fa) {
+                                        continue;
+                                    }
+                                }
+                                let topics: Vec<String> = log["topics"]
+                                    .as_array()
+                                    .map(|t| t.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                                    .unwrap_or_default();
+                                logs.push(RpcLog {
+                                    address: log_addr.to_string(),
+                                    topics,
+                                    data: log["data"].as_str().unwrap_or("0x").to_string(),
+                                    block_number: format!("0x{:x}", block_num),
+                                    block_hash: format!("0x{}", hex::encode(block_hash)),
+                                    transaction_hash: format!("{:?}", tx.hash),
+                                    transaction_index: format!("0x{:x}", tx_idx),
+                                    log_index: format!("0x{:x}", log_idx),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(logs)
+    }
 }
 
 fn parse_address(s: &str) -> RpcResult<Address> {
@@ -342,4 +513,30 @@ fn internal_err(msg: String) -> jsonrpsee::types::ErrorObjectOwned {
 
 fn invalid_params(msg: String) -> jsonrpsee::types::ErrorObjectOwned {
     jsonrpsee::types::ErrorObjectOwned::owned(-32602, msg, None::<()>)
+}
+
+fn parse_u256_hex(s: &str) -> RpcResult<U256> {
+    let s = s.strip_prefix("0x").unwrap_or(s);
+    if s.is_empty() || s == "0" {
+        return Ok(U256::ZERO);
+    }
+    U256::from_str_radix(s, 16)
+        .map_err(|e| invalid_params(format!("Invalid U256 hex: {e}")))
+}
+
+fn parse_hex_data(s: &str) -> RpcResult<Vec<u8>> {
+    let s = s.strip_prefix("0x").unwrap_or(s);
+    if s.is_empty() {
+        return Ok(Vec::new());
+    }
+    hex::decode(s).map_err(|e| invalid_params(format!("Invalid hex data: {e}")))
+}
+
+fn parse_u64_hex(s: &str) -> RpcResult<u64> {
+    let s = s.strip_prefix("0x").unwrap_or(s);
+    if s.is_empty() || s == "0" {
+        return Ok(0);
+    }
+    u64::from_str_radix(s, 16)
+        .map_err(|e| invalid_params(format!("Invalid u64 hex: {e}")))
 }
