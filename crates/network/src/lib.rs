@@ -8,4 +8,7 @@ pub mod service;
 pub mod protocol;
 
 pub use error::NetworkError;
-pub use service::NetworkService;
+pub use service::{NetworkService, NetworkEvent};
+
+// Re-export libp2p types used by consumers
+pub use libp2p::Multiaddr;

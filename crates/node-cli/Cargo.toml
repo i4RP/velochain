@@ -14,6 +14,7 @@ velochain-node = { workspace = true }
 velochain-primitives = { workspace = true }
 velochain-consensus = { workspace = true }
 velochain-game-engine = { workspace = true }
+velochain-network = { workspace = true }
 velochain-rpc = { workspace = true }
 velochain-state = { workspace = true }
 velochain-storage = { workspace = true }
