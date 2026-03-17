@@ -1,0 +1,21 @@
+[package]
+name = "velochain-rpc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "JSON-RPC server for VeloChain - Ethereum-compatible RPC + game-specific endpoints"
+
+[dependencies]
+velochain-primitives = { workspace = true }
+velochain-state = { workspace = true }
+velochain-txpool = { workspace = true }
+velochain-game-engine = { workspace = true }
+jsonrpsee = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+alloy-primitives = { workspace = true }
+hex = { workspace = true }

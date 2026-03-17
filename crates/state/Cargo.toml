@@ -1,0 +1,17 @@
+[package]
+name = "velochain-state"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Blockchain state management for VeloChain - world state, accounts, game state"
+
+[dependencies]
+velochain-primitives = { workspace = true }
+velochain-storage = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+parking_lot = { workspace = true }
+sha3 = { workspace = true }
+alloy-primitives = { workspace = true }
