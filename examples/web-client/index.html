@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VeloChain - Game World Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0a0e17;
+      color: #e0e6f0;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 320px;
+      background: #111827;
+      border-right: 1px solid #1f2937;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid #1f2937;
+      background: #0d1117;
+    }
+    .sidebar-header h1 {
+      font-size: 18px;
+      color: #58a6ff;
+      margin-bottom: 4px;
+    }
+    .sidebar-header .status {
+      font-size: 12px;
+      color: #8b949e;
+    }
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+    .status-dot.connected { background: #3fb950; }
+    .status-dot.disconnected { background: #f85149; }
+    .status-dot.connecting { background: #d29922; }
+
+    /* Info panels */
+    .info-panel {
+      padding: 12px 16px;
+      border-bottom: 1px solid #1f2937;
+    }
+    .info-panel h3 {
+      font-size: 11px;
+      text-transform: uppercase;
+      color: #8b949e;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 3px 0;
+      font-size: 13px;
+    }
+    .info-row .label { color: #8b949e; }
+    .info-row .value { color: #e0e6f0; font-family: monospace; }
+
+    /* Player list */
+    .player-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+    .player-item {
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 4px;
+      background: #161b22;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .player-item .player-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #3fb950;
+      flex-shrink: 0;
+    }
+    .player-item .player-dot.dead { background: #f85149; }
+    .player-item .player-name { flex: 1; }
+    .player-item .player-pos {
+      font-size: 11px;
+      color: #8b949e;
+      font-family: monospace;
+    }
+
+    /* Main area */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Minimap */
+    .minimap-container {
+      flex: 1;
+      position: relative;
+      background: #0d1117;
+      overflow: hidden;
+    }
+    #minimap {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .minimap-overlay {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(13, 17, 23, 0.85);
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #8b949e;
+    }
+    .minimap-legend {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      background: rgba(13, 17, 23, 0.85);
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 11px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    /* Chat panel */
+    .chat-panel {
+      height: 200px;
+      border-top: 1px solid #1f2937;
+      display: flex;
+      flex-direction: column;
+      background: #111827;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      font-size: 13px;
+    }
+    .chat-msg {
+      padding: 3px 0;
+      line-height: 1.4;
+    }
+    .chat-msg .sender {
+      color: #58a6ff;
+      font-weight: 600;
+    }
+    .chat-msg .timestamp {
+      color: #484f58;
+      font-size: 11px;
+      margin-left: 6px;
+    }
+    .chat-msg.system {
+      color: #8b949e;
+      font-style: italic;
+    }
+    .chat-input-row {
+      display: flex;
+      border-top: 1px solid #1f2937;
+      padding: 8px;
+      gap: 8px;
+    }
+    .chat-input-row input {
+      flex: 1;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #e0e6f0;
+      font-size: 13px;
+      outline: none;
+    }
+    .chat-input-row input:focus { border-color: #58a6ff; }
+    .chat-input-row button {
+      background: #238636;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .chat-input-row button:hover { background: #2ea043; }
+
+    /* Connection bar */
+    .connection-bar {
+      padding: 8px 16px;
+      background: #0d1117;
+      border-bottom: 1px solid #1f2937;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .connection-bar input {
+      flex: 1;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 12px;
+      color: #e0e6f0;
+      font-size: 13px;
+      font-family: monospace;
+      outline: none;
+    }
+    .connection-bar button {
+      background: #238636;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .connection-bar button:hover { background: #2ea043; }
+    .connection-bar button.disconnect {
+      background: #da3633;
+    }
+    .connection-bar button.disconnect:hover { background: #f85149; }
+
+    /* Controls */
+    .controls {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      display: flex;
+      gap: 4px;
+    }
+    .controls button {
+      width: 36px;
+      height: 36px;
+      background: rgba(13, 17, 23, 0.85);
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      color: #e0e6f0;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .controls button:hover { background: rgba(22, 27, 34, 0.9); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>VeloChain</h1>
+      <div class="status">
+        <span class="status-dot disconnected" id="statusDot"></span>
+        <span id="statusText">Disconnected</span>
+      </div>
+    </div>
+
+    <div class="info-panel" id="worldPanel">
+      <h3>World Info</h3>
+      <div class="info-row"><span class="label">Tick</span><span class="value" id="infoTick">-</span></div>
+      <div class="info-row"><span class="label">Block</span><span class="value" id="infoBlock">-</span></div>
+      <div class="info-row"><span class="label">Entities</span><span class="value" id="infoEntities">-</span></div>
+      <div class="info-row"><span class="label">Players</span><span class="value" id="infoPlayers">-</span></div>
+      <div class="info-row"><span class="label">Chain ID</span><span class="value" id="infoChainId">-</span></div>
+      <div class="info-row"><span class="label">Sessions</span><span class="value" id="infoSessions">-</span></div>
+    </div>
+
+    <div class="info-panel">
+      <h3>Players Online</h3>
+    </div>
+    <div class="player-list" id="playerList">
+      <div class="player-item" style="color: #484f58; font-style: italic;">No players connected</div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="connection-bar">
+      <input type="text" id="rpcUrl" value="http://localhost:8545" placeholder="RPC URL">
+      <button id="connectBtn" onclick="toggleConnection()">Connect</button>
+    </div>
+
+    <div class="minimap-container">
+      <canvas id="minimap"></canvas>
+      <div class="minimap-overlay" id="cursorInfo">
+        Hover over map for coordinates
+      </div>
+      <div class="minimap-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div> Player</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#d29922"></div> NPC</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div> Dead</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div> Your player</div>
+      </div>
+      <div class="controls">
+        <button onclick="zoomIn()" title="Zoom In">+</button>
+        <button onclick="zoomOut()" title="Zoom Out">-</button>
+        <button onclick="resetView()" title="Reset View">R</button>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div class="chat-panel">
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg system">Welcome to VeloChain. Connect to a node to begin.</div>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendChat()" disabled>
+        <button onclick="sendChat()" id="chatBtn" disabled>Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---- State ----
+    let connected = false;
+    let rpcUrl = '';
+    let pollInterval = null;
+    let entities = [];
+    let players = [];
+    let worldInfo = null;
+    let zoom = 3;
+    let offsetX = 0;
+    let offsetY = 0;
+    let canvas, ctx;
+
+    // ---- Init ----
+    window.addEventListener('load', () => {
+      canvas = document.getElementById('minimap');
+      ctx = canvas.getContext('2d');
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+      canvas.addEventListener('mousemove', onCanvasMouseMove);
+      canvas.addEventListener('wheel', onCanvasWheel);
+      drawGrid();
+    });
+
+    function resizeCanvas() {
+      const container = canvas.parentElement;
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      render();
+    }
+
+    // ---- Connection ----
+    async function toggleConnection() {
+      if (connected) {
+        disconnect();
+      } else {
+        await connect();
+      }
+    }
+
+    async function connect() {
+      rpcUrl = document.getElementById('rpcUrl').value.trim();
+      if (!rpcUrl) return;
+
+      setStatus('connecting', 'Connecting...');
+
+      try {
+        const chainId = await rpcCall('eth_chainId');
+        document.getElementById('infoChainId').textContent = parseInt(chainId, 16);
+
+        connected = true;
+        setStatus('connected', 'Connected');
+        document.getElementById('connectBtn').textContent = 'Disconnect';
+        document.getElementById('connectBtn').classList.add('disconnect');
+        document.getElementById('chatInput').disabled = false;
+        document.getElementById('chatBtn').disabled = false;
+
+        addChatMessage(null, `Connected to node at ${rpcUrl}`, true);
+
+        // Start polling
+        await refreshAll();
+        pollInterval = setInterval(refreshAll, 1000);
+      } catch (e) {
+        setStatus('disconnected', 'Connection failed');
+        addChatMessage(null, `Failed to connect: ${e.message}`, true);
+      }
+    }
+
+    function disconnect() {
+      connected = false;
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+      setStatus('disconnected', 'Disconnected');
+      document.getElementById('connectBtn').textContent = 'Connect';
+      document.getElementById('connectBtn').classList.remove('disconnect');
+      document.getElementById('chatInput').disabled = true;
+      document.getElementById('chatBtn').disabled = true;
+      addChatMessage(null, 'Disconnected from node', true);
+    }
+
+    // ---- RPC ----
+    let rpcId = 0;
+    async function rpcCall(method, params = []) {
+      const response = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method, params }),
+      });
+      const json = await response.json();
+      if (json.error) throw new Error(json.error.message);
+      return json.result;
+    }
+
+    async function refreshAll() {
+      if (!connected) return;
+      try {
+        // Fetch world info
+        worldInfo = await rpcCall('game_getWorldInfo');
+        document.getElementById('infoTick').textContent = worldInfo.current_tick;
+        document.getElementById('infoEntities').textContent = worldInfo.entity_count;
+        document.getElementById('infoPlayers').textContent = worldInfo.player_count;
+
+        // Fetch block number
+        const blockHex = await rpcCall('eth_blockNumber');
+        document.getElementById('infoBlock').textContent = parseInt(blockHex, 16);
+
+        // Fetch active sessions
+        try {
+          const sessions = await rpcCall('game_getActiveSessions');
+          document.getElementById('infoSessions').textContent = sessions;
+        } catch {
+          document.getElementById('infoSessions').textContent = '-';
+        }
+
+        // Fetch players
+        players = await rpcCall('game_getAllPlayers');
+        updatePlayerList();
+
+        // Fetch entities in visible area
+        const viewSize = 200 / zoom;
+        entities = await rpcCall('game_getEntitiesInArea', [
+          -viewSize + offsetX,
+          -viewSize + offsetY,
+          viewSize + offsetX,
+          viewSize + offsetY,
+        ]);
+
+        render();
+      } catch (e) {
+        if (connected) {
+          console.error('Refresh error:', e);
+        }
+      }
+    }
+
+    // ---- Player List ----
+    function updatePlayerList() {
+      const list = document.getElementById('playerList');
+      if (players.length === 0) {
+        list.innerHTML = '<div class="player-item" style="color:#484f58;font-style:italic;">No players in world</div>';
+        return;
+      }
+      list.innerHTML = players.map(p => `
+        <div class="player-item">
+          <div class="player-dot ${p.is_alive ? '' : 'dead'}"></div>
+          <div class="player-name">${truncAddr(p.address)}</div>
+          <div class="player-pos">(${p.position[0].toFixed(0)}, ${p.position[1].toFixed(0)})</div>
+        </div>
+      `).join('');
+    }
+
+    function truncAddr(addr) {
+      if (!addr || addr.length < 12) return addr || '?';
+      return addr.slice(0, 6) + '...' + addr.slice(-4);
+    }
+
+    // ---- Minimap Rendering ----
+    function render() {
+      if (!ctx) return;
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // Clear
+      ctx.fillStyle = '#0d1117';
+      ctx.fillRect(0, 0, w, h);
+
+      // Draw grid
+      drawGrid();
+
+      // Draw entities
+      for (const entity of entities) {
+        const [sx, sy] = worldToScreen(entity.position[0], entity.position[1]);
+        if (sx < -20 || sx > w + 20 || sy < -20 || sy > h + 20) continue;
+
+        const isPlayer = entity.entity_type.startsWith('player:');
+        const isDead = entity.health && entity.health[2] === 1.0;
+        const radius = isPlayer ? 6 : 4;
+
+        // Color
+        let color;
+        if (isDead) {
+          color = '#f85149';
+        } else if (isPlayer) {
+          color = '#3fb950';
+        } else {
+          color = '#d29922';
+        }
+
+        // Draw entity dot
+        ctx.beginPath();
+        ctx.arc(sx, sy, radius * zoom * 0.3 + 2, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        // Draw outline
+        ctx.strokeStyle = color + '60';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(sx, sy, radius * zoom * 0.3 + 5, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = '#e0e6f0';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        if (isPlayer) {
+          const addr = entity.entity_type.split(':')[1];
+          ctx.fillText(truncAddr(addr), sx, sy - radius * zoom * 0.3 - 8);
+        } else {
+          const npcType = entity.entity_type.split(':')[1] || 'npc';
+          ctx.fillText(npcType, sx, sy - radius * zoom * 0.3 - 8);
+        }
+
+        // Health bar
+        if (entity.health) {
+          const [current, max] = entity.health;
+          const barW = 24;
+          const barH = 3;
+          const barX = sx - barW / 2;
+          const barY = sy + radius * zoom * 0.3 + 6;
+          const pct = max > 0 ? current / max : 0;
+
+          ctx.fillStyle = '#21262d';
+          ctx.fillRect(barX, barY, barW, barH);
+          ctx.fillStyle = pct > 0.5 ? '#3fb950' : pct > 0.25 ? '#d29922' : '#f85149';
+          ctx.fillRect(barX, barY, barW * pct, barH);
+        }
+      }
+
+      // Draw origin marker
+      const [ox, oy] = worldToScreen(0, 0);
+      ctx.strokeStyle = '#30363d';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(ox - 8, oy);
+      ctx.lineTo(ox + 8, oy);
+      ctx.moveTo(ox, oy - 8);
+      ctx.lineTo(ox, oy + 8);
+      ctx.stroke();
+    }
+
+    function drawGrid() {
+      if (!ctx) return;
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // Grid
+      const gridSize = 10 * zoom;
+      ctx.strokeStyle = '#161b22';
+      ctx.lineWidth = 0.5;
+
+      const startX = (w / 2 + offsetX * zoom) % gridSize;
+      const startY = (h / 2 + offsetY * zoom) % gridSize;
+
+      for (let x = startX; x < w; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      for (let y = startY; y < h; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+    }
+
+    function worldToScreen(wx, wy) {
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      return [
+        cx + (wx - offsetX) * zoom,
+        cy + (wy - offsetY) * zoom,
+      ];
+    }
+
+    function screenToWorld(sx, sy) {
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      return [
+        (sx - cx) / zoom + offsetX,
+        (sy - cy) / zoom + offsetY,
+      ];
+    }
+
+    // ---- Canvas Interaction ----
+    function onCanvasMouseMove(e) {
+      const rect = canvas.getBoundingClientRect();
+      const sx = e.clientX - rect.left;
+      const sy = e.clientY - rect.top;
+      const [wx, wy] = screenToWorld(sx, sy);
+      document.getElementById('cursorInfo').textContent =
+        `World: (${wx.toFixed(1)}, ${wy.toFixed(1)}) | Zoom: ${zoom.toFixed(1)}x`;
+    }
+
+    function onCanvasWheel(e) {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        zoom = Math.min(zoom * 1.2, 20);
+      } else {
+        zoom = Math.max(zoom / 1.2, 0.5);
+      }
+      render();
+    }
+
+    function zoomIn() { zoom = Math.min(zoom * 1.5, 20); render(); }
+    function zoomOut() { zoom = Math.max(zoom / 1.5, 0.5); render(); }
+    function resetView() { zoom = 3; offsetX = 0; offsetY = 0; render(); }
+
+    // ---- Chat ----
+    async function sendChat() {
+      const input = document.getElementById('chatInput');
+      const msg = input.value.trim();
+      if (!msg || !connected) return;
+
+      input.value = '';
+      addChatMessage('You', msg);
+
+      try {
+        await rpcCall('game_submitAction', ['chat', { message: msg }]);
+      } catch (e) {
+        addChatMessage(null, `Failed to send: ${e.message}`, true);
+      }
+    }
+
+    function addChatMessage(sender, message, isSystem = false) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = 'chat-msg' + (isSystem ? ' system' : '');
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      if (isSystem) {
+        div.innerHTML = `<span class="timestamp">[${time}]</span> ${escapeHtml(message)}`;
+      } else {
+        div.innerHTML = `<span class="timestamp">[${time}]</span> <span class="sender">${escapeHtml(sender)}:</span> ${escapeHtml(message)}`;
+      }
+
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---- Status ----
+    function setStatus(state, text) {
+      const dot = document.getElementById('statusDot');
+      dot.className = 'status-dot ' + state;
+      document.getElementById('statusText').textContent = text;
+    }
+  </script>
+</body>
+</html>

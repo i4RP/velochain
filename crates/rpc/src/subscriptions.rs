@@ -36,6 +36,27 @@ pub enum GameEvent {
     PendingTransaction {
         hash: String,
     },
+    /// Player state changed (position, health, etc.).
+    PlayerState {
+        address: String,
+        position: [f32; 3],
+        health: f32,
+        is_alive: bool,
+    },
+    /// Chat message broadcast.
+    ChatMessage {
+        sender: String,
+        message: String,
+        tick: u64,
+    },
+    /// Entity update (spawn, move, despawn).
+    EntityUpdate {
+        entity_id: u64,
+        entity_type: String,
+        position: [f32; 3],
+        health: Option<f32>,
+        removed: bool,
+    },
 }
 
 /// Channel sender for broadcasting events.
@@ -60,6 +81,18 @@ pub trait SubscriptionApi {
     /// Subscribe to pending transactions.
     #[subscription(name = "subscribePendingTxs" => "pendingTx", unsubscribe = "unsubscribePendingTxs", item = GameEvent)]
     async fn subscribe_pending_txs(&self) -> SubscriptionResult;
+
+    /// Subscribe to player state changes.
+    #[subscription(name = "subscribePlayerState" => "playerState", unsubscribe = "unsubscribePlayerState", item = GameEvent)]
+    async fn subscribe_player_state(&self) -> SubscriptionResult;
+
+    /// Subscribe to chat messages.
+    #[subscription(name = "subscribeChatMessages" => "chatMessage", unsubscribe = "unsubscribeChatMessages", item = GameEvent)]
+    async fn subscribe_chat_messages(&self) -> SubscriptionResult;
+
+    /// Subscribe to entity updates (spawn, move, despawn).
+    #[subscription(name = "subscribeEntityUpdates" => "entityUpdate", unsubscribe = "unsubscribeEntityUpdates", item = GameEvent)]
+    async fn subscribe_entity_updates(&self) -> SubscriptionResult;
 }
 
 /// Ethereum-standard subscription API.
@@ -152,6 +185,87 @@ impl SubscriptionApiServer for SubscriptionApiImpl {
                 match rx.recv().await {
                     Ok(event) => {
                         if matches!(event, GameEvent::PendingTransaction { .. }) {
+                            let msg = jsonrpsee::SubscriptionMessage::from_json(&event)
+                                .expect("serialize event");
+                            if sink.send(msg).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        debug!("Subscriber lagged by {} messages", n);
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+
+        Ok(())
+    }
+
+    async fn subscribe_player_state(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+        let mut rx = self.event_tx.subscribe();
+        let sink = pending.accept().await?;
+
+        tokio::spawn(async move {
+            loop {
+                match rx.recv().await {
+                    Ok(event) => {
+                        if matches!(event, GameEvent::PlayerState { .. }) {
+                            let msg = jsonrpsee::SubscriptionMessage::from_json(&event)
+                                .expect("serialize event");
+                            if sink.send(msg).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        debug!("Subscriber lagged by {} messages", n);
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+
+        Ok(())
+    }
+
+    async fn subscribe_chat_messages(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+        let mut rx = self.event_tx.subscribe();
+        let sink = pending.accept().await?;
+
+        tokio::spawn(async move {
+            loop {
+                match rx.recv().await {
+                    Ok(event) => {
+                        if matches!(event, GameEvent::ChatMessage { .. }) {
+                            let msg = jsonrpsee::SubscriptionMessage::from_json(&event)
+                                .expect("serialize event");
+                            if sink.send(msg).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        debug!("Subscriber lagged by {} messages", n);
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+
+        Ok(())
+    }
+
+    async fn subscribe_entity_updates(&self, pending: PendingSubscriptionSink) -> SubscriptionResult {
+        let mut rx = self.event_tx.subscribe();
+        let sink = pending.accept().await?;
+
+        tokio::spawn(async move {
+            loop {
+                match rx.recv().await {
+                    Ok(event) => {
+                        if matches!(event, GameEvent::EntityUpdate { .. }) {
                             let msg = jsonrpsee::SubscriptionMessage::from_json(&event)
                                 .expect("serialize event");
                             if sink.send(msg).await.is_err() {

@@ -8,6 +8,7 @@ use crate::admin_api::{AdminApiImpl, AdminApiServer};
 use crate::error::RpcError;
 use crate::eth_api::{EthApiImpl, EthApiServer};
 use crate::game_api::{GameApiImpl, GameApiServer};
+use crate::session::{SessionApiImpl, SessionApiServer, SessionManager};
 use crate::subscriptions::{
     EventSender, EthSubscriptionApiImpl, EthSubscriptionApiServer, SubscriptionApiImpl,
     SubscriptionApiServer,
@@ -58,6 +59,7 @@ impl RpcServer {
         game_world: Arc<GameWorld>,
         txpool: Arc<TransactionPool>,
         event_tx: Option<EventSender>,
+        session_manager: Option<Arc<SessionManager>>,
     ) -> Result<SocketAddr, RpcError> {
         let server = Server::builder()
             .max_connections(config.max_ws_connections)
@@ -75,6 +77,15 @@ impl RpcServer {
         module
             .merge(game_api.into_rpc())
             .map_err(|e| RpcError::Server(e.to_string()))?;
+
+        // Register session API if session manager is provided
+        if let Some(sm) = session_manager {
+            let session_api = SessionApiImpl::new(sm);
+            module
+                .merge(session_api.into_rpc())
+                .map_err(|e| RpcError::Server(e.to_string()))?;
+            info!("Session management API endpoints registered");
+        }
 
         // Register admin API if enabled
         if config.enable_admin {

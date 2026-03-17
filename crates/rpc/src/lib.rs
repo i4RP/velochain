@@ -11,7 +11,9 @@ pub mod eth_api;
 pub mod game_api;
 pub mod admin_api;
 pub mod subscriptions;
+pub mod session;
 
 pub use error::RpcError;
 pub use server::RpcServer;
+pub use session::SessionManager;
 pub use subscriptions::{EventSender, GameEvent, new_event_channel};
