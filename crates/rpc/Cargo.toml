@@ -22,3 +22,4 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 alloy-primitives = { workspace = true }
 hex = { workspace = true }
+sha3 = { workspace = true }

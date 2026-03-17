@@ -11,7 +11,7 @@ use velochain_network::service::{NetworkConfig, NetworkService};
 use velochain_network::{Multiaddr, NetworkEvent};
 use velochain_node::{BlockProducer, Chain, ConfigFile, NodeMetrics, ShutdownController};
 use velochain_primitives::{BlockHeader, Genesis, Keypair};
-use velochain_rpc::{server::RpcConfig, RpcServer, new_event_channel};
+use velochain_rpc::{server::RpcConfig, RpcServer, SessionManager, new_event_channel};
 use velochain_state::WorldState;
 use velochain_storage::Database;
 use velochain_txpool::TransactionPool;
@@ -360,6 +360,7 @@ async fn cmd_run(
         ..Default::default()
     };
     let (event_tx, _event_rx) = new_event_channel();
+    let session_manager = Arc::new(SessionManager::default());
     let rpc_addr = RpcServer::start(
         rpc_config,
         chain.db().clone(),
@@ -367,6 +368,7 @@ async fn cmd_run(
         chain.game_world().clone(),
         chain.txpool().clone(),
         Some(event_tx),
+        Some(session_manager),
     ).await?;
     info!("RPC server listening on {}", rpc_addr);
 
