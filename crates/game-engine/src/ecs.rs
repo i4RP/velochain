@@ -25,6 +25,12 @@ pub enum Component {
     Inventory(InventoryComponent),
     /// Physics body.
     Physics(PhysicsComponent),
+    /// Combat stats (attack, defense, cooldowns).
+    Combat(CombatComponent),
+    /// NPC AI state.
+    AiState(AiStateComponent),
+    /// Equipment slots.
+    Equipment(EquipmentComponent),
 }
 
 /// Position component.
@@ -93,6 +99,71 @@ pub struct PhysicsComponent {
     pub velocity_z: f32,
     pub mass: f32,
     pub is_grounded: bool,
+}
+
+/// Combat stats component.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CombatComponent {
+    pub attack: f32,
+    pub defense: f32,
+    pub attack_range: f32,
+    pub attack_cooldown: u32,
+    pub cooldown_remaining: u32,
+    pub crit_chance: f32,
+    pub crit_multiplier: f32,
+}
+
+impl Default for CombatComponent {
+    fn default() -> Self {
+        Self {
+            attack: 10.0,
+            defense: 5.0,
+            attack_range: 2.0,
+            attack_cooldown: 5,
+            cooldown_remaining: 0,
+            crit_chance: 0.05,
+            crit_multiplier: 2.0,
+        }
+    }
+}
+
+/// NPC AI state component.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AiStateComponent {
+    /// Current AI behavior state.
+    pub state: NpcAiState,
+    /// Patrol waypoints.
+    pub waypoints: Vec<[f32; 3]>,
+    /// Leash range (max distance from home).
+    pub leash_range: f32,
+    /// Aggro range.
+    pub aggro_range: f32,
+    /// Movement speed.
+    pub move_speed: f32,
+    /// Experience reward on kill.
+    pub experience_reward: u64,
+}
+
+/// AI state machine values.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum NpcAiState {
+    Idle { ticks_remaining: u32 },
+    Patrolling { waypoint_index: usize },
+    Chasing { target_id: EntityId },
+    Fleeing { threat_id: EntityId, ticks_remaining: u32 },
+    Returning,
+    Dead { respawn_ticks: u32 },
+}
+
+/// Equipment component tracking equipped items.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EquipmentComponent {
+    pub main_hand: Option<u32>,
+    pub off_hand: Option<u32>,
+    pub head: Option<u32>,
+    pub chest: Option<u32>,
+    pub legs: Option<u32>,
+    pub boots: Option<u32>,
 }
 
 /// The ECS world storage.
