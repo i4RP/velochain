@@ -4,11 +4,16 @@
 //! Connects to a VeloChain node via WebSocket/RPC for real-time updates.
 
 pub mod camera;
+pub mod camera_effects;
 pub mod network;
+pub mod particles;
 pub mod renderer;
+pub mod sound;
 pub mod states;
 pub mod terrain_render;
+pub mod touch_input;
 pub mod ui;
+pub mod ui_panels;
 
 use bevy::prelude::*;
 use states::GameClientState;
@@ -27,10 +32,15 @@ impl Plugin for VeloChainClientPlugin {
         .init_state::<GameClientState>()
         .add_plugins((
             camera::CameraPlugin,
+            camera_effects::CameraEffectsPlugin,
             renderer::RendererPlugin,
             terrain_render::TerrainPlugin,
             ui::UiPlugin,
+            ui_panels::UiPanelsPlugin,
             network::NetworkPlugin,
+            particles::ParticlePlugin,
+            sound::SoundPlugin,
+            touch_input::TouchInputPlugin,
         ));
     }
 }
