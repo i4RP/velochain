@@ -1,0 +1,43 @@
+[package]
+name = "velochain-game-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Bevy-based 3D/2D game client for VeloChain with WASM support"
+
+[dependencies]
+velochain-game-engine = { workspace = true }
+velochain-primitives = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha3 = { workspace = true }
+tracing = { workspace = true }
+
+# Bevy game engine
+bevy = { version = "0.15", default-features = false, features = [
+    "bevy_asset",
+    "bevy_color",
+    "bevy_core_pipeline",
+    "bevy_render",
+    "bevy_sprite",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_window",
+    "bevy_winit",
+    "bevy_state",
+    "bevy_picking",
+    "default_font",
+    "multi_threaded",
+    "png",
+    "x11",
+] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["WebSocket", "MessageEvent", "ErrorEvent", "BinaryType", "console"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+
+[features]
+default = []
+wasm = []

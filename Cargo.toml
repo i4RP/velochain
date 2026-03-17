@@ -12,6 +12,7 @@ members = [
     "crates/rpc",
     "crates/node",
     "crates/node-cli",
+    "crates/game-client",
 ]
 
 [workspace.package]
