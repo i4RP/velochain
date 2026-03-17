@@ -29,6 +29,26 @@ pub enum NetworkMessage {
         hash: [u8; 32],
         game_tick: u64,
     },
+    /// Request a range of block headers.
+    GetHeaders {
+        start_block: u64,
+        max_headers: u64,
+    },
+    /// Response with a batch of block headers.
+    HeadersResponse(Vec<velochain_primitives::BlockHeader>),
+    /// Request block bodies by hashes.
+    GetBodies {
+        hashes: Vec<[u8; 32]>,
+    },
+    /// Response with block bodies.
+    BodiesResponse(Vec<velochain_primitives::BlockBody>),
+    /// Status message exchanged on peer connect.
+    Status {
+        chain_id: u64,
+        best_block: u64,
+        best_hash: [u8; 32],
+        genesis_hash: [u8; 32],
+    },
     /// Ping/pong for liveness.
     Ping(u64),
     Pong(u64),

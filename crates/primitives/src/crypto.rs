@@ -85,6 +85,66 @@ impl Keypair {
     pub fn secret_key_bytes(&self) -> [u8; 32] {
         self.signing_key.to_bytes().into()
     }
+
+    /// Get the hex-encoded private key (without 0x prefix).
+    pub fn secret_key_hex(&self) -> String {
+        hex::encode(self.secret_key_bytes())
+    }
+
+    /// Save the keypair to a keystore file (simple JSON format).
+    /// The private key is XOR-encrypted with the password hash for basic protection.
+    pub fn save_keystore(
+        &self,
+        path: &std::path::Path,
+        password: &str,
+    ) -> Result<(), PrimitivesError> {
+        let secret = self.secret_key_bytes();
+        let pw_hash = Keccak256::digest(password.as_bytes());
+        let mut encrypted = [0u8; 32];
+        for i in 0..32 {
+            encrypted[i] = secret[i] ^ pw_hash[i];
+        }
+        let keystore = serde_json::json!({
+            "address": format!("{:?}", self.address),
+            "crypto": {
+                "cipher": "xor-keccak256",
+                "ciphertext": hex::encode(encrypted),
+            },
+            "version": 1,
+        });
+        let data = serde_json::to_string_pretty(&keystore)
+            .map_err(|e| PrimitivesError::SignatureError(format!("Serialize keystore: {e}")))?;
+        std::fs::write(path, data)
+            .map_err(|e| PrimitivesError::SignatureError(format!("Write keystore: {e}")))?;
+        Ok(())
+    }
+
+    /// Load a keypair from a keystore file.
+    pub fn load_keystore(
+        path: &std::path::Path,
+        password: &str,
+    ) -> Result<Self, PrimitivesError> {
+        let data = std::fs::read_to_string(path)
+            .map_err(|e| PrimitivesError::SignatureError(format!("Read keystore: {e}")))?;
+        let keystore: serde_json::Value = serde_json::from_str(&data)
+            .map_err(|e| PrimitivesError::SignatureError(format!("Parse keystore: {e}")))?;
+        let ciphertext = keystore["crypto"]["ciphertext"]
+            .as_str()
+            .ok_or_else(|| PrimitivesError::SignatureError("Missing ciphertext".to_string()))?;
+        let encrypted = hex::decode(ciphertext)
+            .map_err(|e| PrimitivesError::SignatureError(format!("Decode ciphertext: {e}")))?;
+        if encrypted.len() != 32 {
+            return Err(PrimitivesError::SignatureError(
+                "Invalid ciphertext length".to_string(),
+            ));
+        }
+        let pw_hash = Keccak256::digest(password.as_bytes());
+        let mut secret = [0u8; 32];
+        for i in 0..32 {
+            secret[i] = encrypted[i] ^ pw_hash[i];
+        }
+        Self::from_secret_key(&secret)
+    }
 }
 
 /// Recover the signer's Ethereum address from a message hash and signature.

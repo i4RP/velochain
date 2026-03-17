@@ -9,7 +9,7 @@ use velochain_consensus::poa::{PoaConfig, PoaConsensus};
 use velochain_game_engine::GameWorld;
 use velochain_network::service::{NetworkConfig, NetworkService};
 use velochain_network::{Multiaddr, NetworkEvent};
-use velochain_node::{BlockProducer, Chain};
+use velochain_node::{BlockProducer, Chain, NodeMetrics, ShutdownController};
 use velochain_primitives::{BlockHeader, Genesis, Keypair};
 use velochain_rpc::{server::RpcConfig, RpcServer};
 use velochain_state::WorldState;
@@ -63,6 +63,48 @@ enum Commands {
         #[arg(short, long, default_value = "./velochain-data")]
         datadir: PathBuf,
     },
+    /// Generate a new validator keypair.
+    GenerateKey {
+        /// Output keystore file path.
+        #[arg(short, long, default_value = "./validator.key.json")]
+        output: PathBuf,
+        /// Password to encrypt the keystore.
+        #[arg(short, long, default_value = "")]
+        password: String,
+    },
+    /// Import a private key into a keystore file.
+    ImportKey {
+        /// Hex-encoded private key.
+        #[arg(long)]
+        private_key: String,
+        /// Output keystore file path.
+        #[arg(short, long, default_value = "./validator.key.json")]
+        output: PathBuf,
+        /// Password to encrypt the keystore.
+        #[arg(short, long, default_value = "")]
+        password: String,
+    },
+    /// Export a private key from a keystore file.
+    ExportKey {
+        /// Path to keystore file.
+        #[arg(short, long)]
+        keystore: PathBuf,
+        /// Password to decrypt the keystore.
+        #[arg(short, long, default_value = "")]
+        password: String,
+    },
+    /// List accounts in the chain state.
+    Accounts {
+        /// Data directory.
+        #[arg(short, long, default_value = "./velochain-data")]
+        datadir: PathBuf,
+    },
+    /// Show peer info.
+    Peers {
+        /// RPC endpoint to query.
+        #[arg(long, default_value = "http://127.0.0.1:8545")]
+        rpc: String,
+    },
 }
 
 #[tokio::main]
@@ -93,6 +135,21 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Status { datadir } => {
             cmd_status(datadir).await?;
+        }
+        Commands::GenerateKey { output, password } => {
+            cmd_generate_key(output, password)?;
+        }
+        Commands::ImportKey { private_key, output, password } => {
+            cmd_import_key(private_key, output, password)?;
+        }
+        Commands::ExportKey { keystore, password } => {
+            cmd_export_key(keystore, password)?;
+        }
+        Commands::Accounts { datadir } => {
+            cmd_accounts(datadir).await?;
+        }
+        Commands::Peers { rpc } => {
+            cmd_peers(rpc).await?;
         }
     }
 
@@ -329,16 +386,48 @@ async fn cmd_run(
                 NetworkEvent::PeerDisconnected(peer_id) => {
                     info!("Peer disconnected: {}", peer_id);
                 }
+                NetworkEvent::HeadersReceived(headers) => {
+                    info!("Received {} block headers from peer", headers.len());
+                }
+                NetworkEvent::BodiesReceived(bodies) => {
+                    info!("Received {} block bodies from peer", bodies.len());
+                }
+                NetworkEvent::PeerStatus { peer_id, best_block, .. } => {
+                    info!("Peer {} status: best_block={}", peer_id, best_block);
+                }
             }
         }
     });
 
+    // Initialize metrics
+    let metrics_registry = prometheus::Registry::new();
+    let metrics = NodeMetrics::new(&metrics_registry)
+        .map_err(|e| anyhow::anyhow!("Failed to create metrics: {e}"))?;
+    metrics.chain_height.set(chain.block_number() as i64);
+    info!("Prometheus metrics initialized");
+
+    // Install graceful shutdown handler
+    let shutdown = ShutdownController::new();
+    shutdown.install_signal_handlers();
+
     info!("VeloChain node running. Press Ctrl+C to stop.");
 
     // Wait for shutdown signal
-    tokio::signal::ctrl_c().await?;
-    info!("Shutting down...");
+    shutdown.wait_for_shutdown().await;
+    info!("Graceful shutdown initiated...");
+
+    // Persist game world state before exit
+    let game_state = chain.game_world().serialize_state()
+        .map_err(|e| anyhow::anyhow!("Failed to serialize game world: {e}"))?;
+    if let Err(e) = chain.db().put_game_state(b"world", &game_state) {
+        tracing::error!("Failed to persist game world on shutdown: {}", e);
+    } else {
+        info!("Game world state persisted to database");
+    }
+
+    // Shut down network
     let _ = network.shutdown();
+    info!("VeloChain node stopped.");
 
     Ok(())
 }
@@ -358,5 +447,102 @@ async fn cmd_status(datadir: PathBuf) -> anyhow::Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn cmd_generate_key(output: PathBuf, password: String) -> anyhow::Result<()> {
+    let keypair = Keypair::random();
+    keypair.save_keystore(&output, &password)?;
+    println!("New validator key generated:");
+    println!("  Address: {:?}", keypair.address());
+    println!("  Keystore: {:?}", output);
+    Ok(())
+}
+
+fn cmd_import_key(private_key: String, output: PathBuf, password: String) -> anyhow::Result<()> {
+    let keypair = Keypair::from_hex(&private_key)?;
+    keypair.save_keystore(&output, &password)?;
+    println!("Key imported:");
+    println!("  Address: {:?}", keypair.address());
+    println!("  Keystore: {:?}", output);
+    Ok(())
+}
+
+fn cmd_export_key(keystore: PathBuf, password: String) -> anyhow::Result<()> {
+    let keypair = Keypair::load_keystore(&keystore, &password)?;
+    println!("Address: {:?}", keypair.address());
+    println!("Private key: 0x{}", keypair.secret_key_hex());
+    Ok(())
+}
+
+async fn cmd_accounts(datadir: PathBuf) -> anyhow::Result<()> {
+    let genesis_path = datadir.join("genesis.json");
+    if !genesis_path.exists() {
+        anyhow::bail!("Chain not initialized. Run 'velochain init' first.");
+    }
+    let genesis: Genesis = serde_json::from_str(&std::fs::read_to_string(&genesis_path)?)?;
+
+    println!("VeloChain Accounts (from genesis)");
+    println!("=================================");
+    for (address, alloc) in &genesis.alloc {
+        println!("  {:?} — balance: {}", address, alloc.balance);
+    }
+    println!("\nValidators:");
+    for v in &genesis.config.consensus.validators {
+        println!("  {:?}", v);
+    }
+    Ok(())
+}
+
+async fn cmd_peers(rpc: String) -> anyhow::Result<()> {
+    // Parse host:port from URL like http://host:port
+    let stripped = rpc.strip_prefix("http://").or_else(|| rpc.strip_prefix("https://")).unwrap_or(&rpc);
+    let addr = if stripped.contains(':') {
+        stripped.split('/').next().unwrap_or("127.0.0.1:8545").to_string()
+    } else {
+        format!("{}:8545", stripped.split('/').next().unwrap_or("127.0.0.1"))
+    };
+
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "method": "net_version",
+        "params": [],
+        "id": 1,
+    });
+    let body_str = serde_json::to_string(&body)?;
+
+    match tokio::net::TcpStream::connect(&addr).await {
+        Ok(stream) => {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let request = format!(
+                "POST / HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                addr,
+                body_str.len(),
+                body_str,
+            );
+            let (mut reader, mut writer) = stream.into_split();
+            writer.write_all(request.as_bytes()).await?;
+            writer.shutdown().await?;
+            let mut buf = Vec::new();
+            reader.read_to_end(&mut buf).await?;
+            let response = String::from_utf8_lossy(&buf);
+            // Extract the JSON body after the HTTP headers
+            if let Some(idx) = response.find("\r\n\r\n") {
+                let json_body = &response[idx + 4..];
+                if let Ok(result) = serde_json::from_str::<serde_json::Value>(json_body) {
+                    println!("Connected to node at {}", rpc);
+                    println!("  Network version: {}", result["result"]);
+                } else {
+                    println!("Connected to node at {} but got unexpected response", rpc);
+                }
+            } else {
+                println!("Connected to {} but received malformed response", rpc);
+            }
+        }
+        Err(e) => {
+            println!("Failed to connect to {}: {}", rpc, e);
+            println!("Make sure a VeloChain node is running with RPC enabled.");
+        }
+    }
     Ok(())
 }
