@@ -1,0 +1,20 @@
+[package]
+name = "velochain-network"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "P2P networking for VeloChain - block/transaction propagation, peer discovery"
+
+[dependencies]
+velochain-primitives = { workspace = true }
+libp2p = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = { workspace = true }
+bytes = { workspace = true }

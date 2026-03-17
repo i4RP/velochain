@@ -1,0 +1,19 @@
+[package]
+name = "velochain-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Storage layer for VeloChain - RocksDB backend with Merkle Patricia Trie"
+
+[dependencies]
+velochain-primitives = { workspace = true }
+rocksdb = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }
+bytes = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+parking_lot = { workspace = true }
+hex = { workspace = true }
+sha3 = { workspace = true }

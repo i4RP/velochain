@@ -1,0 +1,16 @@
+[package]
+name = "velochain-txpool"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Transaction pool for VeloChain - pending/queued transaction management"
+
+[dependencies]
+velochain-primitives = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+parking_lot = { workspace = true }
+dashmap = { workspace = true }
+alloy-primitives = { workspace = true }
+tokio = { workspace = true }

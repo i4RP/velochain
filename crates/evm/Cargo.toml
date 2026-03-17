@@ -1,0 +1,17 @@
+[package]
+name = "velochain-evm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "EVM execution engine for VeloChain - asset management via revm"
+
+[dependencies]
+velochain-primitives = { workspace = true }
+velochain-state = { workspace = true }
+revm = { workspace = true }
+alloy-primitives = { workspace = true }
+sha3 = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+bytes = { workspace = true }

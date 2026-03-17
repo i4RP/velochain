@@ -1,0 +1,27 @@
+[package]
+name = "velochain-node-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "CLI entry point for VeloChain node"
+
+[[bin]]
+name = "velochain"
+path = "src/main.rs"
+
+[dependencies]
+velochain-node = { workspace = true }
+velochain-primitives = { workspace = true }
+velochain-consensus = { workspace = true }
+velochain-game-engine = { workspace = true }
+velochain-rpc = { workspace = true }
+velochain-state = { workspace = true }
+velochain-storage = { workspace = true }
+velochain-txpool = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }

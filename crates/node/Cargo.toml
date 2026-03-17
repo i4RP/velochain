@@ -1,0 +1,23 @@
+[package]
+name = "velochain-node"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Node orchestrator for VeloChain - coordinates all subsystems"
+
+[dependencies]
+velochain-primitives = { workspace = true }
+velochain-storage = { workspace = true }
+velochain-state = { workspace = true }
+velochain-consensus = { workspace = true }
+velochain-network = { workspace = true }
+velochain-evm = { workspace = true }
+velochain-game-engine = { workspace = true }
+velochain-txpool = { workspace = true }
+velochain-rpc = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+parking_lot = { workspace = true }

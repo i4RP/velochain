@@ -1,0 +1,18 @@
+[package]
+name = "velochain-consensus"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Consensus engine for VeloChain - PoA (Clique) with game tick integration"
+
+[dependencies]
+velochain-primitives = { workspace = true }
+velochain-state = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+k256 = { workspace = true }
+alloy-primitives = { workspace = true }
+chrono = { workspace = true }
+parking_lot = { workspace = true }
+tokio = { workspace = true }
