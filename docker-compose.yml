@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  velochain-node:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: velochain-node
+    ports:
+      - "8545:8545"   # JSON-RPC (HTTP + WebSocket)
+      - "30303:30303" # P2P
+      - "9090:9090"   # Metrics
+    volumes:
+      - velochain-data:/home/velochain/data
+      - ./keystore:/home/velochain/keystore:ro
+    environment:
+      - RUST_LOG=info
+      - VELOCHAIN_RPC_ADDR=0.0.0.0:8545
+      - VELOCHAIN_RPC_ENABLE_ADMIN=true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8545", "-d", '{"jsonrpc":"2.0","method":"admin_health","params":[],"id":1}']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  velochain-data:
+    driver: local

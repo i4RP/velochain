@@ -124,7 +124,7 @@ impl Database {
 
         // Index each transaction
         for (idx, tx) in block.body.transactions.iter().enumerate() {
-            let tx_index = TxIndex {
+            let tx_index = TxIndexEntry {
                 block_hash: *hash.as_ref(),
                 index: idx as u32,
             };
@@ -205,19 +205,32 @@ impl Database {
     pub fn get_game_state(&self, key: &[u8]) -> Result<Option<Vec<u8>>, StorageError> {
         self.get_cf(tables::cf::GAME_STATE, key)
     }
+
+    /// Create a new write batch for atomic multi-operation writes.
+    pub fn write_batch(&self) -> crate::batch::WriteBatchOps {
+        crate::batch::WriteBatchOps::new(Arc::clone(&self.db))
+    }
 }
 
 /// Index entry for locating a transaction within a block.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct TxIndex {
-    block_hash: [u8; 32],
-    index: u32,
+pub(crate) struct TxIndexEntry {
+    pub(crate) block_hash: [u8; 32],
+    pub(crate) index: u32,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    fn make_test_header(number: u64) -> BlockHeader {
+        let mut h = BlockHeader::genesis(Default::default());
+        h.number = number;
+        h.timestamp = 1000 + number;
+        h.game_tick = number;
+        h
+    }
 
     #[test]
     fn test_open_database() {
@@ -233,5 +246,136 @@ mod tests {
         db.put_meta("test_key", b"test_value").unwrap();
         let value = db.get_meta("test_key").unwrap();
         assert_eq!(value, Some(b"test_value".to_vec()));
+    }
+
+    #[test]
+    fn test_get_missing_meta() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+        let value = db.get_meta("nonexistent").unwrap();
+        assert!(value.is_none());
+    }
+
+    #[test]
+    fn test_put_get_header() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+        let header = make_test_header(1);
+        let hash = header.hash();
+        db.put_header(hash.as_ref(), &header).unwrap();
+
+        let retrieved = db.get_header(hash.as_ref()).unwrap().unwrap();
+        assert_eq!(retrieved.number, 1);
+        assert_eq!(retrieved.timestamp, 1001);
+    }
+
+    #[test]
+    fn test_get_missing_header() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+        let hash = [0u8; 32];
+        assert!(db.get_header(&hash).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_block_number_to_hash() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+        let header = make_test_header(5);
+        let hash = header.hash();
+        db.put_header(hash.as_ref(), &header).unwrap();
+
+        let retrieved_hash = db.get_block_hash_by_number(5).unwrap().unwrap();
+        let hash_bytes: &[u8; 32] = hash.as_ref();
+        assert_eq!(retrieved_hash, *hash_bytes);
+    }
+
+    #[test]
+    fn test_get_missing_block_hash() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+        assert!(db.get_block_hash_by_number(999).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_put_get_block() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+        let header = make_test_header(1);
+        let block = Block::new(header, vec![]);
+        let hash = block.hash();
+        db.put_block(&block).unwrap();
+
+        let body = db.get_body(hash.as_ref()).unwrap().unwrap();
+        assert!(body.transactions.is_empty());
+
+        let header = db.get_header(hash.as_ref()).unwrap().unwrap();
+        assert_eq!(header.number, 1);
+    }
+
+    #[test]
+    fn test_latest_block_number() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+
+        assert!(db.get_latest_block_number().unwrap().is_none());
+        db.put_latest_block_number(42).unwrap();
+        assert_eq!(db.get_latest_block_number().unwrap(), Some(42));
+        db.put_latest_block_number(100).unwrap();
+        assert_eq!(db.get_latest_block_number().unwrap(), Some(100));
+    }
+
+    #[test]
+    fn test_receipt_operations() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+        let hash = [0xABu8; 32];
+        let data = b"receipt_data_here";
+        db.put_receipt(&hash, data).unwrap();
+        let retrieved = db.get_receipt(&hash).unwrap().unwrap();
+        assert_eq!(retrieved, data.to_vec());
+    }
+
+    #[test]
+    fn test_game_state_operations() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+        db.put_game_state(b"world", b"serialized_world").unwrap();
+        let retrieved = db.get_game_state(b"world").unwrap().unwrap();
+        assert_eq!(retrieved, b"serialized_world".to_vec());
+    }
+
+    #[test]
+    fn test_delete_cf() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+        db.put_meta("to_delete", b"value").unwrap();
+        assert!(db.get_meta("to_delete").unwrap().is_some());
+        db.delete_cf(tables::cf::META, b"to_delete").unwrap();
+        assert!(db.get_meta("to_delete").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_multiple_blocks_sequential() {
+        let dir = tempdir().unwrap();
+        let db = Database::open(dir.path()).unwrap();
+
+        let genesis = make_test_header(0);
+        let genesis_hash = genesis.hash();
+        let block0 = Block::new(genesis, vec![]);
+        db.put_block(&block0).unwrap();
+
+        let mut header1 = make_test_header(1);
+        header1.parent_hash = genesis_hash;
+        let header1 = header1;
+        let block1 = Block::new(header1, vec![]);
+        db.put_block(&block1).unwrap();
+
+        db.put_latest_block_number(1).unwrap();
+        assert_eq!(db.get_latest_block_number().unwrap(), Some(1));
+
+        let hash0 = db.get_block_hash_by_number(0).unwrap().unwrap();
+        let hash1 = db.get_block_hash_by_number(1).unwrap().unwrap();
+        assert_ne!(hash0, hash1);
     }
 }

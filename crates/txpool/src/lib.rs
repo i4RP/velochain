@@ -5,6 +5,8 @@
 
 pub mod error;
 pub mod pool;
+#[cfg(test)]
+mod tests;
 
 pub use error::TxPoolError;
 pub use pool::TransactionPool;

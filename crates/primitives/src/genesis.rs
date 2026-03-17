@@ -158,6 +158,272 @@ pub struct GenesisAccount {
     pub nonce: u64,
 }
 
+/// Errors from genesis validation.
+#[derive(Debug, Clone)]
+pub struct GenesisValidationError(pub String);
+
+impl std::fmt::Display for GenesisValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Genesis validation error: {}", self.0)
+    }
+}
+
+impl std::error::Error for GenesisValidationError {}
+
+impl Genesis {
+    /// Validate the genesis configuration for correctness.
+    pub fn validate(&self) -> Result<(), GenesisValidationError> {
+        // Chain ID must be non-zero
+        if self.config.chain_id == 0 {
+            return Err(GenesisValidationError("chain_id must be non-zero".into()));
+        }
+
+        // Block time must be non-zero
+        if self.config.block_time == 0 {
+            return Err(GenesisValidationError("block_time must be non-zero".into()));
+        }
+
+        // Tick interval must be non-zero
+        if self.config.tick_interval_ms == 0 {
+            return Err(GenesisValidationError("tick_interval_ms must be non-zero".into()));
+        }
+
+        // Consensus engine must be "poa"
+        if self.config.consensus.engine != "poa" {
+            return Err(GenesisValidationError(format!(
+                "unsupported consensus engine: '{}', only 'poa' is supported",
+                self.config.consensus.engine
+            )));
+        }
+
+        // PoA period must be non-zero
+        if self.config.consensus.period == 0 {
+            return Err(GenesisValidationError("consensus period must be non-zero".into()));
+        }
+
+        // Gas limit must be non-zero
+        if self.gas_limit == 0 {
+            return Err(GenesisValidationError("gas_limit must be non-zero".into()));
+        }
+
+        // World size must be non-zero
+        if self.config.world.size_chunks[0] == 0 || self.config.world.size_chunks[1] == 0 {
+            return Err(GenesisValidationError("world size_chunks must be non-zero".into()));
+        }
+
+        // Max height must be non-zero
+        if self.config.world.max_height == 0 {
+            return Err(GenesisValidationError("world max_height must be non-zero".into()));
+        }
+
+        // EVM block gas limit must be non-zero
+        if self.config.evm.block_gas_limit == 0 {
+            return Err(GenesisValidationError("evm block_gas_limit must be non-zero".into()));
+        }
+
+        // Precompile range must be valid
+        if self.config.evm.precompile_range[0] > self.config.evm.precompile_range[1] {
+            return Err(GenesisValidationError(
+                "evm precompile_range start must be <= end".into(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Create a devnet genesis configuration (single validator, generous allocations).
+    pub fn devnet(validator: Address) -> Self {
+        let mut alloc = HashMap::new();
+        alloc.insert(
+            validator,
+            GenesisAccount {
+                balance: U256::from(1_000_000_000_000_000_000_000_000u128), // 1M tokens
+                code: Vec::new(),
+                storage: HashMap::new(),
+                nonce: 0,
+            },
+        );
+
+        Self {
+            config: ChainConfig {
+                chain_id: 27181,
+                block_time: 1,
+                tick_interval_ms: 200,
+                consensus: ConsensusConfig {
+                    engine: "poa".to_string(),
+                    period: 1,
+                    epoch: 30000,
+                    validators: vec![validator],
+                },
+                world: WorldConfig {
+                    seed: 42,
+                    size_chunks: [64, 64],
+                    max_height: 256,
+                    spawn_point: [0.0, 0.0, 64.0],
+                },
+                evm: EvmConfig::default(),
+                forks: ForkConfig::default(),
+            },
+            alloc,
+            timestamp: 0,
+            extra_data: Vec::new(),
+            gas_limit: crate::DEFAULT_BLOCK_GAS_LIMIT,
+            difficulty: 1,
+        }
+    }
+
+    /// Create a testnet genesis configuration (multiple validators, moderate allocations).
+    pub fn testnet(validators: Vec<Address>) -> Self {
+        let mut alloc = HashMap::new();
+        for v in &validators {
+            alloc.insert(
+                *v,
+                GenesisAccount {
+                    balance: U256::from(100_000_000_000_000_000_000_000u128), // 100K tokens
+                    code: Vec::new(),
+                    storage: HashMap::new(),
+                    nonce: 0,
+                },
+            );
+        }
+
+        Self {
+            config: ChainConfig {
+                chain_id: 27182,
+                block_time: 2,
+                tick_interval_ms: 200,
+                consensus: ConsensusConfig {
+                    engine: "poa".to_string(),
+                    period: 2,
+                    epoch: 30000,
+                    validators,
+                },
+                world: WorldConfig {
+                    seed: 12345,
+                    size_chunks: [256, 256],
+                    max_height: 512,
+                    spawn_point: [128.0, 128.0, 64.0],
+                },
+                evm: EvmConfig {
+                    eip1559: true,
+                    ..EvmConfig::default()
+                },
+                forks: ForkConfig {
+                    eip1559_block: Some(0),
+                    ..ForkConfig::default()
+                },
+            },
+            alloc,
+            timestamp: 0,
+            extra_data: Vec::new(),
+            gas_limit: crate::DEFAULT_BLOCK_GAS_LIMIT,
+            difficulty: 1,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_genesis_validates() {
+        let genesis = Genesis::default();
+        assert!(genesis.validate().is_ok());
+    }
+
+    #[test]
+    fn test_devnet_genesis_validates() {
+        let genesis = Genesis::devnet(Address::repeat_byte(0x01));
+        assert!(genesis.validate().is_ok());
+        assert_eq!(genesis.config.chain_id, 27181);
+        assert_eq!(genesis.config.consensus.validators.len(), 1);
+    }
+
+    #[test]
+    fn test_testnet_genesis_validates() {
+        let validators = vec![Address::repeat_byte(0x01), Address::repeat_byte(0x02)];
+        let genesis = Genesis::testnet(validators);
+        assert!(genesis.validate().is_ok());
+        assert_eq!(genesis.config.chain_id, 27182);
+        assert_eq!(genesis.config.consensus.validators.len(), 2);
+        assert!(genesis.config.evm.eip1559);
+    }
+
+    #[test]
+    fn test_invalid_chain_id() {
+        let mut genesis = Genesis::default();
+        genesis.config.chain_id = 0;
+        assert!(genesis.validate().is_err());
+    }
+
+    #[test]
+    fn test_invalid_block_time() {
+        let mut genesis = Genesis::default();
+        genesis.config.block_time = 0;
+        assert!(genesis.validate().is_err());
+    }
+
+    #[test]
+    fn test_invalid_tick_interval() {
+        let mut genesis = Genesis::default();
+        genesis.config.tick_interval_ms = 0;
+        assert!(genesis.validate().is_err());
+    }
+
+    #[test]
+    fn test_invalid_consensus_engine() {
+        let mut genesis = Genesis::default();
+        genesis.config.consensus.engine = "pos".to_string();
+        assert!(genesis.validate().is_err());
+    }
+
+    #[test]
+    fn test_invalid_gas_limit() {
+        let mut genesis = Genesis::default();
+        genesis.gas_limit = 0;
+        assert!(genesis.validate().is_err());
+    }
+
+    #[test]
+    fn test_invalid_world_size() {
+        let mut genesis = Genesis::default();
+        genesis.config.world.size_chunks = [0, 256];
+        assert!(genesis.validate().is_err());
+    }
+
+    #[test]
+    fn test_invalid_precompile_range() {
+        let mut genesis = Genesis::default();
+        genesis.config.evm.precompile_range = [10, 5];
+        assert!(genesis.validate().is_err());
+    }
+
+    #[test]
+    fn test_fork_config_activation() {
+        let forks = ForkConfig {
+            eip1559_block: Some(100),
+            code_size_increase_block: Some(200),
+            game_precompiles_block: None,
+        };
+        assert!(!forks.is_eip1559_active(99));
+        assert!(forks.is_eip1559_active(100));
+        assert!(forks.is_eip1559_active(101));
+        assert!(!forks.is_code_size_increase_active(199));
+        assert!(forks.is_code_size_increase_active(200));
+        assert!(!forks.is_game_precompiles_active(1000));
+    }
+
+    #[test]
+    fn test_genesis_json_roundtrip() {
+        let genesis = Genesis::devnet(Address::repeat_byte(0xAA));
+        let json = serde_json::to_string_pretty(&genesis).unwrap();
+        let deserialized: Genesis = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.config.chain_id, genesis.config.chain_id);
+        assert_eq!(deserialized.gas_limit, genesis.gas_limit);
+    }
+}
+
 impl Default for Genesis {
     fn default() -> Self {
         let mut alloc = HashMap::new();
