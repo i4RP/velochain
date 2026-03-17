@@ -89,3 +89,20 @@ velochain-game-engine = { path = "crates/game-engine" }
 velochain-txpool = { path = "crates/txpool" }
 velochain-rpc = { path = "crates/rpc" }
 velochain-node = { path = "crates/node" }
+
+# Release build optimization
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+# Fast compile for development
+[profile.dev]
+opt-level = 0
+debug = true
+
+# Optimized test builds (faster test execution)
+[profile.test]
+opt-level = 1
