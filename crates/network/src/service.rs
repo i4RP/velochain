@@ -60,6 +60,8 @@ pub enum NetworkCommand {
     BroadcastBlock(Box<velochain_primitives::Block>),
     /// Broadcast a transaction to all peers.
     BroadcastTransaction(Box<velochain_primitives::SignedTransaction>),
+    /// Publish a sync request (GetHeaders, GetBodies, etc.) to peers.
+    PublishSyncRequest(Box<protocol::NetworkMessage>),
     /// Connect to a peer.
     Dial(Multiaddr),
     /// Shutdown the network.
@@ -73,6 +75,18 @@ pub enum NetworkEvent {
     BlockReceived(Box<velochain_primitives::Block>),
     /// A new transaction was received from a peer.
     TransactionReceived(Box<velochain_primitives::SignedTransaction>),
+    /// Received block headers from a peer (sync response).
+    HeadersReceived(Vec<velochain_primitives::BlockHeader>),
+    /// Received block bodies from a peer (sync response).
+    BodiesReceived(Vec<velochain_primitives::BlockBody>),
+    /// Received a peer's status message.
+    PeerStatus {
+        peer_id: PeerId,
+        chain_id: u64,
+        best_block: u64,
+        best_hash: [u8; 32],
+        genesis_hash: [u8; 32],
+    },
     /// A peer connected.
     PeerConnected(PeerId),
     /// A peer disconnected.
@@ -185,6 +199,21 @@ impl NetworkService {
                                         NetworkMessage::NewTransaction(tx) => {
                                             let _ = event_tx.send(NetworkEvent::TransactionReceived(Box::new(tx)));
                                         }
+                                        NetworkMessage::HeadersResponse(headers) => {
+                                            let _ = event_tx.send(NetworkEvent::HeadersReceived(headers));
+                                        }
+                                        NetworkMessage::BodiesResponse(bodies) => {
+                                            let _ = event_tx.send(NetworkEvent::BodiesReceived(bodies));
+                                        }
+                                        NetworkMessage::Status { chain_id, best_block, best_hash, genesis_hash } => {
+                                            let _ = event_tx.send(NetworkEvent::PeerStatus {
+                                                peer_id: PeerId::random(),
+                                                chain_id,
+                                                best_block,
+                                                best_hash,
+                                                genesis_hash,
+                                            });
+                                        }
                                         _ => {}
                                     }
                                 }
@@ -228,6 +257,14 @@ impl NetworkService {
                                     let topic = gossipsub::IdentTopic::new(protocol::topics::TRANSACTIONS);
                                     if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic, data) {
                                         error!("Failed to publish transaction: {}", e);
+                                    }
+                                }
+                            }
+                            Some(NetworkCommand::PublishSyncRequest(msg)) => {
+                                if let Ok(data) = serde_json::to_vec(&*msg) {
+                                    let topic = gossipsub::IdentTopic::new(protocol::topics::BLOCKS);
+                                    if let Err(e) = swarm.behaviour_mut().gossipsub.publish(topic, data) {
+                                        error!("Failed to publish sync request: {}", e);
                                     }
                                 }
                             }
@@ -278,6 +315,22 @@ impl NetworkService {
     ) -> Result<(), NetworkError> {
         self.command_tx
             .send(NetworkCommand::BroadcastTransaction(Box::new(tx)))
+            .map_err(|_| NetworkError::ChannelClosed)
+    }
+
+    /// Request block headers from peers for chain sync.
+    pub fn request_headers(&self, start_block: u64, max_headers: u64) -> Result<(), NetworkError> {
+        let msg = protocol::NetworkMessage::GetHeaders { start_block, max_headers };
+        self.command_tx
+            .send(NetworkCommand::PublishSyncRequest(Box::new(msg)))
+            .map_err(|_| NetworkError::ChannelClosed)
+    }
+
+    /// Broadcast our status to peers.
+    pub fn broadcast_status(&self, chain_id: u64, best_block: u64, best_hash: [u8; 32], genesis_hash: [u8; 32]) -> Result<(), NetworkError> {
+        let msg = protocol::NetworkMessage::Status { chain_id, best_block, best_hash, genesis_hash };
+        self.command_tx
+            .send(NetworkCommand::PublishSyncRequest(Box::new(msg)))
             .map_err(|_| NetworkError::ChannelClosed)
     }
 
