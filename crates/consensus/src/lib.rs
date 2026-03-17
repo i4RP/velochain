@@ -5,11 +5,13 @@
 
 pub mod error;
 pub mod poa;
+pub mod validator_manager;
 #[cfg(test)]
 mod tests;
 
 pub use error::ConsensusError;
 pub use poa::PoaConsensus;
+pub use validator_manager::ValidatorManager;
 
 use async_trait::async_trait;
 use velochain_primitives::{Block, BlockHeader};

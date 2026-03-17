@@ -7,9 +7,11 @@ pub mod batch;
 pub mod cache;
 pub mod db;
 pub mod error;
+pub mod pruning;
 pub mod tables;
 
 pub use batch::WriteBatchOps;
 pub use cache::ChainCache;
 pub use db::Database;
 pub use error::StorageError;
+pub use pruning::PruningEngine;
