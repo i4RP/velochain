@@ -12,4 +12,4 @@ pub mod game_api_types;
 
 pub use error::GameEngineError;
 pub use world::GameWorld;
-pub use game_api_types::PlayerInfo;
+pub use game_api_types::{PlayerInfo, EntitySnapshot};

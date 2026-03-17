@@ -175,4 +175,14 @@ impl Block {
             body: BlockBody { transactions },
         }
     }
+
+    /// Compute the transactions root hash (keccak256 of ordered tx hashes).
+    pub fn compute_transactions_root(&self) -> B256 {
+        use sha3::{Digest, Keccak256};
+        let mut hasher = Keccak256::new();
+        for tx in &self.body.transactions {
+            hasher.update(tx.hash.as_slice());
+        }
+        B256::from_slice(&hasher.finalize())
+    }
 }

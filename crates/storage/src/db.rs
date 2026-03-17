@@ -170,6 +170,30 @@ impl Database {
         }
     }
 
+    /// Get a block body by hash.
+    pub fn get_body(&self, hash: &[u8; 32]) -> Result<Option<velochain_primitives::BlockBody>, StorageError> {
+        match self.get_cf(tables::cf::BODIES, hash)? {
+            Some(data) => {
+                let body = bincode::deserialize(&data)
+                    .map_err(|e| StorageError::Deserialization(e.to_string()))?;
+                Ok(Some(body))
+            }
+            None => Ok(None),
+        }
+    }
+
+    // --- Receipt operations ---
+
+    /// Store a transaction receipt.
+    pub fn put_receipt(&self, tx_hash: &[u8; 32], receipt_data: &[u8]) -> Result<(), StorageError> {
+        self.put_cf(tables::cf::RECEIPTS, tx_hash, receipt_data)
+    }
+
+    /// Get a transaction receipt by hash.
+    pub fn get_receipt(&self, tx_hash: &[u8; 32]) -> Result<Option<Vec<u8>>, StorageError> {
+        self.get_cf(tables::cf::RECEIPTS, tx_hash)
+    }
+
     // --- Game state operations ---
 
     /// Store game state data.

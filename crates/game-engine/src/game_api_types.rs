@@ -16,3 +16,13 @@ pub struct PlayerInfo {
     pub level: u32,
     pub is_alive: bool,
 }
+
+/// Entity snapshot returned by area-based queries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntitySnapshot {
+    pub entity_id: u64,
+    pub entity_type: String,
+    pub position: [f32; 3],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub health: Option<[f32; 3]>,
+}

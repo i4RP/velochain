@@ -10,5 +10,5 @@ pub mod block_producer;
 
 pub use config::NodeConfig;
 pub use error::NodeError;
-pub use chain::Chain;
+pub use chain::{Chain, TransactionReceipt, ReceiptLog};
 pub use block_producer::BlockProducer;

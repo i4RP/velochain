@@ -1,5 +1,7 @@
 //! Chain management - tracks the canonical chain and processes blocks.
 
+use alloy_primitives::{Address, B256};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 use velochain_consensus::{ConsensusEngine, PoaConsensus};
@@ -11,6 +13,40 @@ use velochain_storage::Database;
 use velochain_txpool::TransactionPool;
 
 use crate::error::NodeError;
+
+/// A transaction receipt recording the outcome of a transaction.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransactionReceipt {
+    /// Transaction hash.
+    pub tx_hash: B256,
+    /// Block number the transaction was included in.
+    pub block_number: u64,
+    /// Block hash the transaction was included in.
+    pub block_hash: B256,
+    /// Index of the transaction within the block.
+    pub index: u32,
+    /// Whether the transaction executed successfully.
+    pub success: bool,
+    /// Gas used by this transaction.
+    pub gas_used: u64,
+    /// Cumulative gas used in the block up to and including this transaction.
+    pub cumulative_gas_used: u64,
+    /// Contract address created (if any).
+    pub contract_address: Option<Address>,
+    /// Logs emitted by the transaction.
+    pub logs: Vec<ReceiptLog>,
+}
+
+/// A log entry within a transaction receipt.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReceiptLog {
+    /// Address of the contract that emitted the log.
+    pub address: Address,
+    /// Log topics.
+    pub topics: Vec<B256>,
+    /// Log data.
+    pub data: Vec<u8>,
+}
 
 /// The blockchain state and chain management.
 pub struct Chain {
@@ -111,12 +147,15 @@ impl Chain {
         // 2. Execute EVM transactions
         let mut evm_txs = Vec::new();
         let mut game_actions = Vec::new();
+        let mut total_gas_used: u64 = 0;
 
         for tx in &block.body.transactions {
             if tx.is_game_action() {
                 if let Some(action) = tx.game_action() {
                     let sender = tx.sender().map_err(|e| NodeError::Internal(format!("Failed to recover sender: {e}")))?;
                     game_actions.push((format!("{:?}", sender), action.clone()));
+                    // Game actions use a fixed gas amount
+                    total_gas_used += 21_000;
                 }
             } else {
                 evm_txs.push(tx.clone());
@@ -124,6 +163,7 @@ impl Chain {
         }
 
         // Execute EVM transactions
+        let mut receipts: Vec<TransactionReceipt> = Vec::new();
         {
             let mut evm = self.evm.lock();
             evm.reset(); // Clean slate for this block
@@ -139,15 +179,83 @@ impl Chain {
             }
 
             for tx in &evm_txs {
+                let sender = tx.sender().map_err(|e| NodeError::Internal(format!("Sender recovery: {e}")))?;
+
+                // Nonce verification: sender nonce must match tx nonce
+                let expected_nonce = self.state.get_nonce(&sender)
+                    .map_err(|e| NodeError::Internal(format!("Nonce read: {e}")))?;
+                if tx.transaction.nonce != expected_nonce {
+                    warn!(
+                        "Nonce mismatch: tx={} expected={} got={}, skipping",
+                        tx.hash, expected_nonce, tx.transaction.nonce
+                    );
+                    receipts.push(TransactionReceipt {
+                        tx_hash: tx.hash,
+                        block_number: block.number(),
+                        block_hash: B256::ZERO,
+                        index: receipts.len() as u32,
+                        success: false,
+                        gas_used: 0,
+                        cumulative_gas_used: total_gas_used,
+                        contract_address: None,
+                        logs: vec![],
+                    });
+                    continue;
+                }
+
                 match evm.execute_tx(tx) {
                     Ok(outcome) => {
+                        total_gas_used += outcome.gas_used;
+
+                        // Deduct gas cost from sender balance
+                        let gas_price = tx.transaction.gas_price.unwrap_or(1);
+                        let gas_cost = alloy_primitives::U256::from(outcome.gas_used) * alloy_primitives::U256::from(gas_price);
+                        if let Err(e) = self.state.sub_balance(&sender, gas_cost) {
+                            debug!("Gas deduction failed for {}: {}", sender, e);
+                        }
+
+                        // Increment sender nonce
+                        if let Err(e) = self.state.increment_nonce(&sender) {
+                            warn!("Nonce increment failed for {}: {}", sender, e);
+                        }
+
                         debug!(
                             "EVM tx executed: hash={}, success={}, gas_used={}",
                             tx.hash, outcome.success, outcome.gas_used
                         );
+                        receipts.push(TransactionReceipt {
+                            tx_hash: tx.hash,
+                            block_number: block.number(),
+                            block_hash: B256::ZERO,
+                            index: receipts.len() as u32,
+                            success: outcome.success,
+                            gas_used: outcome.gas_used,
+                            cumulative_gas_used: total_gas_used,
+                            contract_address: outcome.contract_address,
+                            logs: outcome.logs.iter().map(|l| ReceiptLog {
+                                address: l.address,
+                                topics: l.topics.clone(),
+                                data: l.data.clone(),
+                            }).collect(),
+                        });
                     }
                     Err(e) => {
                         warn!("EVM tx failed: hash={}, error={}", tx.hash, e);
+                        // Still increment nonce on failure (Ethereum behavior)
+                        if let Err(e) = self.state.increment_nonce(&sender) {
+                            warn!("Nonce increment failed for {}: {}", sender, e);
+                        }
+                        receipts.push(TransactionReceipt {
+                            tx_hash: tx.hash,
+                            block_number: block.number(),
+                            block_hash: B256::ZERO,
+                            index: receipts.len() as u32,
+                            success: false,
+                            gas_used: 0,
+                            cumulative_gas_used: total_gas_used,
+                            contract_address: None,
+                            logs: vec![],
+                        });
                     }
                 }
             }
@@ -158,8 +266,46 @@ impl Chain {
             }
         }
 
+        // Process game action transactions: nonce check, gas deduct, create receipts
+        let mut game_cumulative_gas: u64 = total_gas_used;
+        for tx in &block.body.transactions {
+            if tx.is_game_action() {
+                let sender = tx.sender().map_err(|e| NodeError::Internal(format!("Sender recovery: {e}")))?;
+
+                // Nonce verification for game actions
+                let expected_nonce = self.state.get_nonce(&sender)
+                    .map_err(|e| NodeError::Internal(format!("Nonce read: {e}")))?;
+                let nonce_ok = tx.transaction.nonce == expected_nonce;
+
+                if nonce_ok {
+                    // Increment nonce
+                    if let Err(e) = self.state.increment_nonce(&sender) {
+                        warn!("Game action nonce increment failed for {}: {}", sender, e);
+                    }
+                    // Deduct fixed gas cost
+                    let gas_cost = alloy_primitives::U256::from(21_000u64);
+                    if let Err(e) = self.state.sub_balance(&sender, gas_cost) {
+                        debug!("Game action gas deduction failed for {}: {}", sender, e);
+                    }
+                }
+
+                game_cumulative_gas += 21_000;
+                receipts.push(TransactionReceipt {
+                    tx_hash: tx.hash,
+                    block_number: block.number(),
+                    block_hash: B256::ZERO,
+                    index: receipts.len() as u32,
+                    success: nonce_ok,
+                    gas_used: 21_000,
+                    cumulative_gas_used: game_cumulative_gas,
+                    contract_address: None,
+                    logs: vec![],
+                });
+            }
+        }
+
         // 3. Run game tick with player actions
-        let _game_state_root = self.game_world.tick(&game_actions)?;
+        let game_state_root = self.game_world.tick(&game_actions)?;
 
         // 4. Persist game world state to database
         if let Ok(game_data) = self.game_world.serialize_state() {
@@ -172,10 +318,17 @@ impl Chain {
         let state_root = self.state.commit()?;
 
         // 6. Store block
+        let block_hash = block.hash();
         self.db.put_block(block)?;
         self.db.put_latest_block_number(block.number())?;
 
-        // 6. Remove included transactions from pool
+        // 6b. Store receipts with correct block hash
+        for receipt in &mut receipts {
+            receipt.block_hash = block_hash;
+        }
+        self.store_receipts(&receipts)?;
+
+        // 7. Remove included transactions from pool
         let tx_hashes: Vec<_> = block
             .body
             .transactions
@@ -184,15 +337,17 @@ impl Chain {
             .collect();
         self.txpool.remove_included(&tx_hashes);
 
-        // 7. Update chain head
+        // 8. Update chain head
         *self.head.write() = Some(block.header.clone());
 
         info!(
-            "Block applied: number={}, txs={}, game_tick={}, state_root={}",
+            "Block applied: number={}, txs={}, gas_used={}, game_tick={}, state_root={}, game_root={}",
             block.number(),
             block.tx_count(),
+            total_gas_used,
             block.header.game_tick,
-            state_root
+            state_root,
+            game_state_root
         );
 
         Ok(())
@@ -221,5 +376,51 @@ impl Chain {
 
     pub fn chain_id(&self) -> u64 {
         self.chain_id
+    }
+
+    /// Store transaction receipts to the database.
+    fn store_receipts(&self, receipts: &[TransactionReceipt]) -> Result<(), NodeError> {
+        for receipt in receipts {
+            let data = serde_json::to_vec(receipt)
+                .map_err(|e| NodeError::Internal(format!("Receipt serialization: {e}")))?;
+            self.db.put_receipt(receipt.tx_hash.as_ref(), &data)?;
+        }
+        Ok(())
+    }
+
+    /// Get a transaction receipt by transaction hash.
+    pub fn get_receipt(&self, tx_hash: &B256) -> Result<Option<TransactionReceipt>, NodeError> {
+        let hash_bytes: &[u8; 32] = tx_hash.as_ref();
+        match self.db.get_receipt(hash_bytes)? {
+            Some(data) => {
+                let receipt: TransactionReceipt = serde_json::from_slice(&data)
+                    .map_err(|e| NodeError::Internal(format!("Receipt deserialization: {e}")))?;
+                Ok(Some(receipt))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Get a block by number.
+    pub fn get_block_by_number(&self, number: u64) -> Result<Option<Block>, NodeError> {
+        let hash = match self.db.get_block_hash_by_number(number)? {
+            Some(h) => h,
+            None => return Ok(None),
+        };
+        self.get_block_by_hash(&B256::from(hash))
+    }
+
+    /// Get a block by hash.
+    pub fn get_block_by_hash(&self, hash: &B256) -> Result<Option<Block>, NodeError> {
+        let hash_bytes: [u8; 32] = hash.0;
+        let header = match self.db.get_header(&hash_bytes)? {
+            Some(h) => h,
+            None => return Ok(None),
+        };
+        let body = match self.db.get_body(&hash_bytes)? {
+            Some(b) => b,
+            None => return Ok(None),
+        };
+        Ok(Some(Block { header, body }))
     }
 }

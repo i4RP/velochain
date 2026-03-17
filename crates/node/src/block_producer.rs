@@ -87,23 +87,41 @@ impl BlockProducer {
         let parent = self.chain.head().ok_or(NodeError::NotInitialized)?;
 
         // 1. Prepare block header from consensus
-        let header = self.chain.consensus().prepare_header(&parent)?;
+        let mut header = self.chain.consensus().prepare_header(&parent)?;
 
-        // 2. Collect pending transactions
+        // 2. Collect pending transactions (up to gas limit)
         let pending_txs = self.chain.txpool().get_pending(1000);
+        let mut selected_txs = Vec::new();
+        let mut gas_used: u64 = 0;
+        for tx in pending_txs {
+            let tx_gas = if tx.is_game_action() {
+                21_000
+            } else {
+                tx.transaction.gas_limit
+            };
+            if gas_used + tx_gas > header.gas_limit {
+                break;
+            }
+            gas_used += tx_gas;
+            selected_txs.push(tx);
+        }
         debug!(
-            "Collected {} pending transactions for block {}",
-            pending_txs.len(),
-            header.number
+            "Selected {} transactions for block {} (gas_used={})",
+            selected_txs.len(),
+            header.number,
+            gas_used
         );
 
-        // 3. Create block
-        let mut block = Block::new(header, pending_txs);
+        // 3. Create block and compute transactions root
+        let mut block = Block::new(header.clone(), selected_txs);
+        header.transactions_root = block.compute_transactions_root();
+        header.gas_used = gas_used;
+        block.header = header;
 
         // 4. Seal block (sign with validator key)
         self.chain.consensus().seal_block(&mut block)?;
 
-        // 5. Apply block to chain
+        // 5. Apply block to chain (computes state roots, stores receipts)
         self.chain.apply_block(&block)?;
 
         Ok(block)

@@ -3,6 +3,7 @@
 use alloy_primitives::Address;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use velochain_state::WorldState;
 use velochain_storage::Database;
@@ -42,6 +43,94 @@ pub trait EthApi {
     /// Returns the current network version.
     #[method(name = "net_version")]
     async fn net_version(&self) -> RpcResult<String>;
+
+    /// Returns block information by number.
+    #[method(name = "getBlockByNumber")]
+    async fn get_block_by_number(
+        &self,
+        number: String,
+        full_txs: bool,
+    ) -> RpcResult<Option<RpcBlock>>;
+
+    /// Returns block information by hash.
+    #[method(name = "getBlockByHash")]
+    async fn get_block_by_hash(
+        &self,
+        hash: String,
+        full_txs: bool,
+    ) -> RpcResult<Option<RpcBlock>>;
+
+    /// Returns a transaction receipt by transaction hash.
+    #[method(name = "getTransactionReceipt")]
+    async fn get_transaction_receipt(
+        &self,
+        hash: String,
+    ) -> RpcResult<Option<RpcReceipt>>;
+}
+
+/// Block information returned by RPC.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcBlock {
+    pub number: String,
+    pub hash: String,
+    pub parent_hash: String,
+    pub timestamp: String,
+    pub gas_limit: String,
+    pub gas_used: String,
+    pub beneficiary: String,
+    pub state_root: String,
+    pub transactions_root: String,
+    pub receipts_root: String,
+    pub game_tick: u64,
+    pub game_state_root: String,
+    pub difficulty: String,
+    pub transactions: Vec<String>,
+}
+
+impl RpcBlock {
+    pub fn from_block(
+        header: &velochain_primitives::BlockHeader,
+        body: &velochain_primitives::BlockBody,
+    ) -> Self {
+        let tx_hashes: Vec<String> = body
+            .transactions
+            .iter()
+            .map(|tx| format!("0x{}", hex::encode(tx.hash.as_slice())))
+            .collect();
+        Self {
+            number: format!("0x{:x}", header.number),
+            hash: format!("0x{}", hex::encode(header.hash().as_slice())),
+            parent_hash: format!("0x{}", hex::encode(header.parent_hash.as_slice())),
+            timestamp: format!("0x{:x}", header.timestamp),
+            gas_limit: format!("0x{:x}", header.gas_limit),
+            gas_used: format!("0x{:x}", header.gas_used),
+            beneficiary: format!("0x{}", hex::encode(header.beneficiary.as_slice())),
+            state_root: format!("0x{}", hex::encode(header.state_root.as_slice())),
+            transactions_root: format!("0x{}", hex::encode(header.transactions_root.as_slice())),
+            receipts_root: format!("0x{}", hex::encode(header.receipts_root.as_slice())),
+            game_tick: header.game_tick,
+            game_state_root: format!("0x{}", hex::encode(header.game_state_root.as_slice())),
+            difficulty: format!("0x{:x}", header.difficulty),
+            transactions: tx_hashes,
+        }
+    }
+}
+
+/// Transaction receipt returned by RPC.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RpcReceipt {
+    pub transaction_hash: String,
+    pub block_number: String,
+    pub block_hash: String,
+    pub transaction_index: String,
+    pub success: bool,
+    pub gas_used: String,
+    pub cumulative_gas_used: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub contract_address: Option<String>,
+    pub logs: Vec<serde_json::Value>,
 }
 
 /// Ethereum API implementation backed by actual chain state.
@@ -135,6 +224,103 @@ impl EthApiServer for EthApiImpl {
 
     async fn net_version(&self) -> RpcResult<String> {
         Ok(self.chain_id.to_string())
+    }
+
+    async fn get_block_by_number(
+        &self,
+        number: String,
+        _full_txs: bool,
+    ) -> RpcResult<Option<RpcBlock>> {
+        let block_num = if number == "latest" {
+            self.db
+                .get_latest_block_number()
+                .map_err(|e| internal_err(format!("Storage error: {e}")))?
+                .unwrap_or(0)
+        } else {
+            let s = number.strip_prefix("0x").unwrap_or(&number);
+            u64::from_str_radix(s, 16).map_err(|e| invalid_params(format!("Invalid block number: {e}")))?
+        };
+
+        let hash = match self.db.get_block_hash_by_number(block_num)
+            .map_err(|e| internal_err(format!("Storage error: {e}")))? {
+            Some(h) => h,
+            None => return Ok(None),
+        };
+
+        let header = match self.db.get_header(&hash)
+            .map_err(|e| internal_err(format!("Storage error: {e}")))? {
+            Some(h) => h,
+            None => return Ok(None),
+        };
+
+        let body = self.db.get_body(&hash)
+            .map_err(|e| internal_err(format!("Storage error: {e}")))?
+            .unwrap_or_else(|| velochain_primitives::BlockBody { transactions: vec![] });
+
+        Ok(Some(RpcBlock::from_block(&header, &body)))
+    }
+
+    async fn get_block_by_hash(
+        &self,
+        hash: String,
+        _full_txs: bool,
+    ) -> RpcResult<Option<RpcBlock>> {
+        let hash_hex = hash.strip_prefix("0x").unwrap_or(&hash);
+        let hash_bytes = hex::decode(hash_hex)
+            .map_err(|e| invalid_params(format!("Invalid hash: {e}")))?;
+        if hash_bytes.len() != 32 {
+            return Err(invalid_params("Hash must be 32 bytes".to_string()));
+        }
+        let mut hash_arr = [0u8; 32];
+        hash_arr.copy_from_slice(&hash_bytes);
+
+        let header = match self.db.get_header(&hash_arr)
+            .map_err(|e| internal_err(format!("Storage error: {e}")))? {
+            Some(h) => h,
+            None => return Ok(None),
+        };
+
+        let body = self.db.get_body(&hash_arr)
+            .map_err(|e| internal_err(format!("Storage error: {e}")))?
+            .unwrap_or_else(|| velochain_primitives::BlockBody { transactions: vec![] });
+
+        Ok(Some(RpcBlock::from_block(&header, &body)))
+    }
+
+    async fn get_transaction_receipt(
+        &self,
+        hash: String,
+    ) -> RpcResult<Option<RpcReceipt>> {
+        let hash_hex = hash.strip_prefix("0x").unwrap_or(&hash);
+        let hash_bytes = hex::decode(hash_hex)
+            .map_err(|e| invalid_params(format!("Invalid hash: {e}")))?;
+        if hash_bytes.len() != 32 {
+            return Err(invalid_params("Hash must be 32 bytes".to_string()));
+        }
+        let mut hash_arr = [0u8; 32];
+        hash_arr.copy_from_slice(&hash_bytes);
+
+        match self.db.get_receipt(&hash_arr)
+            .map_err(|e| internal_err(format!("Storage error: {e}")))? {
+            Some(data) => {
+                // Parse the stored receipt (node's TransactionReceipt format)
+                let stored: serde_json::Value = serde_json::from_slice(&data)
+                    .map_err(|e| internal_err(format!("Receipt decode: {e}")))?;
+                let receipt = RpcReceipt {
+                    transaction_hash: format!("0x{}", stored["tx_hash"].as_str().unwrap_or("").trim_start_matches("0x")),
+                    block_number: format!("0x{:x}", stored["block_number"].as_u64().unwrap_or(0)),
+                    block_hash: format!("0x{}", stored["block_hash"].as_str().unwrap_or("").trim_start_matches("0x")),
+                    transaction_index: format!("0x{:x}", stored["index"].as_u64().unwrap_or(0)),
+                    success: stored["success"].as_bool().unwrap_or(false),
+                    gas_used: format!("0x{:x}", stored["gas_used"].as_u64().unwrap_or(0)),
+                    cumulative_gas_used: format!("0x{:x}", stored["cumulative_gas_used"].as_u64().unwrap_or(0)),
+                    contract_address: stored["contract_address"].as_str().map(|s| s.to_string()),
+                    logs: stored["logs"].as_array().cloned().unwrap_or_default(),
+                };
+                Ok(Some(receipt))
+            }
+            None => Ok(None),
+        }
     }
 }
 

@@ -9,8 +9,8 @@ use velochain_primitives::transaction::{GameAction, Transaction};
 use velochain_primitives::Keypair;
 use velochain_txpool::TransactionPool;
 
-/// Re-export PlayerInfo from game engine for RPC responses.
-pub use velochain_game_engine::PlayerInfo;
+/// Re-export PlayerInfo and EntitySnapshot from game engine for RPC responses.
+pub use velochain_game_engine::{PlayerInfo, EntitySnapshot};
 
 /// World information response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -43,6 +43,20 @@ pub trait GameApi {
     /// Submit a game action (move, attack, etc.).
     #[method(name = "submitAction")]
     async fn submit_action(&self, action_type: String, params: serde_json::Value) -> RpcResult<String>;
+
+    /// List all players in the world.
+    #[method(name = "getAllPlayers")]
+    async fn get_all_players(&self) -> RpcResult<Vec<PlayerInfo>>;
+
+    /// Get entities within a bounding box area.
+    #[method(name = "getEntitiesInArea")]
+    async fn get_entities_in_area(
+        &self,
+        min_x: f32,
+        min_y: f32,
+        max_x: f32,
+        max_y: f32,
+    ) -> RpcResult<Vec<EntitySnapshot>>;
 }
 
 /// Game API implementation backed by actual game world.
@@ -114,6 +128,20 @@ impl GameApiServer for GameApiImpl {
         })?;
 
         Ok(format!("{:?}", hash))
+    }
+
+    async fn get_all_players(&self) -> RpcResult<Vec<PlayerInfo>> {
+        Ok(self.game_world.get_all_players())
+    }
+
+    async fn get_entities_in_area(
+        &self,
+        min_x: f32,
+        min_y: f32,
+        max_x: f32,
+        max_y: f32,
+    ) -> RpcResult<Vec<EntitySnapshot>> {
+        Ok(self.game_world.get_entities_in_area(min_x, min_y, max_x, max_y))
     }
 }
 
